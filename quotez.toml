@@ -1,0 +1,11 @@
+[server]
+host = "0.0.0.0"
+tcp_port = 8017
+udp_port = 8017
+
+[quotes]
+directories = ["tests/fixtures/quotes"]
+mode = "random"
+
+[polling]
+interval_seconds = 60

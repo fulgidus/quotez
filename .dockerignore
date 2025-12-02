@@ -1,0 +1,32 @@
+# Git
+.git/
+.gitignore
+
+# Zig build artifacts (keep only final binary)
+.zig-cache/
+src/
+build.zig
+
+# Keep test fixtures for sample quotes
+# tests/
+
+# Documentation and specs
+specs/
+.specify/
+README.md
+LICENSE
+AGENTS.md
+
+# IDE and development
+.vscode/
+.idea/
+*.swp
+*.log
+
+# Docker
+Dockerfile
+.dockerignore
+
+# Other
+.DS_Store
+Thumbs.db
