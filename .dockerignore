@@ -5,8 +5,10 @@
 # Zig build artifacts (keep only final binary)
 .zig-cache/
 src/
-tests/
 build.zig
+
+# Keep test fixtures for sample quotes
+# tests/
 
 # Documentation and specs
 specs/

@@ -1,7 +1,7 @@
 [server]
 host = "0.0.0.0"
-tcp_port = 17
-udp_port = 17
+tcp_port = 8017
+udp_port = 8017
 
 [quotes]
 directories = ["tests/fixtures/quotes"]
