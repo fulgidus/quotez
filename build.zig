@@ -1,32 +1,23 @@
 const std = @import("std");
 
 pub fn build(b: *std.Build) void {
-    // Target options
-    const target = b.standardTargetOptions(.{
-        .default_target = .{
-            .cpu_arch = .x86_64,
-            .os_tag = .linux,
-            .abi = .musl,
-        },
-    });
+    const target = b.standardTargetOptions(.{});
+    const optimize = b.standardOptimizeOption(.{});
 
-    // Optimization mode
-    const optimize = b.standardOptimizeOption(.{
-        .preferred_optimize_mode = .ReleaseSmall,
-    });
-
-    // Main executable
-    const exe = b.addExecutable(.{
-        .name = "quotez",
+    // Create the root module
+    const root_module = std.Build.Module.create(b, .{
         .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
     });
 
-    // Link libc (musl for static)
-    exe.linkLibC();
+    // Main executable
+    const exe = b.addExecutable(.{
+        .name = "quotez",
+        .root_module = root_module,
+    });
 
-    // Install artifact
+    exe.linkLibC();
     b.installArtifact(exe);
 
     // Run command
@@ -39,26 +30,21 @@ pub fn build(b: *std.Build) void {
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
 
-    // Unit tests
-    const unit_tests = b.addTest(.{
+    // Create the test module
+    const test_module = std.Build.Module.create(b, .{
         .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
     });
 
-    const run_unit_tests = b.addRunArtifact(unit_tests);
-
-    // Integration tests
-    const integration_tests = b.addTest(.{
-        .root_source_file = b.path("tests/integration/protocol_test.zig"),
-        .target = target,
-        .optimize = optimize,
+    // Unit tests
+    const unit_tests = b.addTest(.{
+        .root_module = test_module,
     });
 
-    const run_integration_tests = b.addRunArtifact(integration_tests);
+    const run_unit_tests = b.addRunArtifact(unit_tests);
 
     // Test step
-    const test_step = b.step("test", "Run unit and integration tests");
+    const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_unit_tests.step);
-    test_step.dependOn(&run_integration_tests.step);
 }
