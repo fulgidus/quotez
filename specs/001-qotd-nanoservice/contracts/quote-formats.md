@@ -73,7 +73,8 @@ When encountering a file, quotez attempts format detection in this strict order:
   3. Array of objects: Extract `"quote"` or `"text"` field from each object
 - Ignore non-string values (numbers, booleans, null)
 - Ignore objects without `quote`/`text` field
-- **Author/metadata fields ignored** (only quote content is extracted)
+- **Author concatenation**: If object has `"author"` field, concatenate as: `"{{quote}} — {{author}}"`
+- Format uses em dash (—) as separator between quote and author
 
 **Error Handling**:
 - Malformed JSON (syntax error): Skip file, log ERROR
@@ -109,9 +110,9 @@ When encountering a file, quotez attempts format detection in this strict order:
 
 **Supported Delimiters**: Comma (`,`), Tab (`\t`)
 
-**Structure**: Each row contains at least one column with quote text. Additional columns (author, category, etc.) are ignored.
+**Structure**: Each row contains quote text in the first column. If second column exists, it's treated as author.
 
-**Standard Format** (Quote in first column):
+**Standard Format** (Quote and author in columns):
 ```csv
 quote,author
 "The only impossible journey is the one you never begin.","Tony Robbins"
@@ -130,6 +131,8 @@ The way to get started is to quit talking and begin doing.
   - If first row contains `"quote"`, `"text"`, or `"content"` header: Skip header row
   - Otherwise: Treat first row as quote
 - Extract first column from each row (quote text)
+- If second column exists, extract as author
+- **Author concatenation**: If author column present, format as: `"{{quote}} — {{author}}"`
 - Trim whitespace from extracted text
 - Ignore empty rows
 - Handle quoted fields: `"Text with, comma"` → `Text with, comma`

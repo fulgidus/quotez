@@ -13,7 +13,7 @@ const SelectorState = union(SelectionMode) {
 
 /// State for random mode (stateless, but needs RNG)
 const RandomState = struct {
-    rng: std.rand.DefaultPrng,
+    rng: std.Random.DefaultPrng,
 };
 
 /// State for sequential mode
@@ -24,14 +24,14 @@ const SequentialState = struct {
 /// State for random-no-repeat mode
 const RandomNoRepeatState = struct {
     exhausted: std.AutoHashMap(usize, void),
-    rng: std.rand.DefaultPrng,
+    rng: std.Random.DefaultPrng,
 };
 
 /// State for shuffle-cycle mode
 const ShuffleCycleState = struct {
     order: []usize,
     position: usize,
-    rng: std.rand.DefaultPrng,
+    rng: std.Random.DefaultPrng,
     allocator: std.mem.Allocator,
 };
 
@@ -45,11 +45,11 @@ pub const Selector = struct {
     pub fn init(allocator: std.mem.Allocator, mode: SelectionMode, quote_count: usize) !Selector {
         // Seed RNG with timestamp
         const seed = @as(u64, @intCast(std.time.timestamp()));
-        
+
         const state = switch (mode) {
             .random => SelectorState{
                 .random = RandomState{
-                    .rng = std.rand.DefaultPrng.init(seed),
+                    .rng = std.Random.DefaultPrng.init(seed),
                 },
             },
             .sequential => SelectorState{
@@ -58,27 +58,27 @@ pub const Selector = struct {
             .random_no_repeat => SelectorState{
                 .random_no_repeat = RandomNoRepeatState{
                     .exhausted = std.AutoHashMap(usize, void).init(allocator),
-                    .rng = std.rand.DefaultPrng.init(seed),
+                    .rng = std.Random.DefaultPrng.init(seed),
                 },
             },
             .shuffle_cycle => blk: {
                 var order = try allocator.alloc(usize, quote_count);
                 errdefer allocator.free(order);
-                
+
                 // Initialize order array [0, 1, 2, ..., n-1]
                 for (order, 0..) |*item, i| {
                     item.* = i;
                 }
-                
+
                 // Shuffle using Fisher-Yates
-                var rng = std.rand.DefaultPrng.init(seed);
+                var rng = std.Random.DefaultPrng.init(seed);
                 var i = quote_count;
                 while (i > 1) {
                     i -= 1;
                     const j = rng.random().intRangeLessThan(usize, 0, i + 1);
                     std.mem.swap(usize, &order[i], &order[j]);
                 }
-                
+
                 break :blk SelectorState{
                     .shuffle_cycle = ShuffleCycleState{
                         .order = order,
@@ -139,7 +139,7 @@ pub const Selector = struct {
     /// Random without repeats until all exhausted
     fn selectRandomNoRepeat(self: *Selector, state: *RandomNoRepeatState, quote_count: usize) usize {
         _ = self;
-        
+
         // If all quotes exhausted, reset
         if (state.exhausted.count() >= quote_count) {
             state.exhausted.clearRetainingCapacity();
@@ -148,7 +148,7 @@ pub const Selector = struct {
         // Find non-exhausted index
         var attempts: usize = 0;
         const max_attempts = quote_count * 10;
-        
+
         while (attempts < max_attempts) : (attempts += 1) {
             const index = state.rng.random().intRangeLessThan(usize, 0, quote_count);
             if (!state.exhausted.contains(index)) {
@@ -175,7 +175,7 @@ pub const Selector = struct {
     /// Shuffle-cycle selection
     fn selectShuffleCycle(self: *Selector, state: *ShuffleCycleState, quote_count: usize) usize {
         _ = self;
-        
+
         // Get current index from shuffled order
         const index = state.order[state.position];
         state.position += 1;

@@ -1,6 +1,18 @@
 [
-  "Be yourself; everyone else is already taken.",
-  "Two things are infinite: the universe and human stupidity.",
-  "The best time to plant a tree was 20 years ago. The second best time is now.",
-  "In three words I can sum up everything I've learned about life: it goes on."
+  {
+    "quote": "Be yourself; everyone else is already taken.",
+    "author": "Oscar Wilde"
+  },
+  {
+    "quote": "Two things are infinite: the universe and human stupidity.",
+    "author": "Albert Einstein"
+  },
+  {
+    "quote": "The best time to plant a tree was 20 years ago. The second best time is now.",
+    "author": "Chinese Proverb"
+  },
+  {
+    "quote": "In three words I can sum up everything I've learned about life: it goes on.",
+    "author": "Robert Frost"
+  }
 ]
