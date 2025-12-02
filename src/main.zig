@@ -13,6 +13,40 @@ const Logger = logger.Logger;
 const TcpServer = tcp_server.TcpServer;
 const UdpServer = udp_server.UdpServer;
 
+// Re-export modules for integration testing
+pub const modules = struct {
+    pub const Config = config;
+    pub const QuoteStoreModule = quote_store;
+    pub const SelectorModule = selector;
+    pub const TcpServerModule = tcp_server;
+    pub const UdpServerModule = udp_server;
+};
+
+/// Global flag for graceful shutdown (accessed by signal handler)
+var running: std.atomic.Value(bool) = std.atomic.Value(bool).init(true);
+
+/// Signal handler for SIGTERM and SIGINT
+fn signalHandler(sig: c_int) callconv(.c) void {
+    _ = sig;
+    running.store(false, .seq_cst);
+}
+
+/// Setup signal handlers for graceful shutdown
+fn setupSignalHandlers() void {
+    const mask: std.posix.sigset_t = std.posix.sigemptyset();
+    const handler = std.posix.Sigaction{
+        .handler = .{ .handler = signalHandler },
+        .mask = mask,
+        .flags = 0,
+    };
+
+    // Handle SIGTERM (docker stop, kill)
+    std.posix.sigaction(std.posix.SIG.TERM, &handler, null);
+
+    // Handle SIGINT (Ctrl+C)
+    std.posix.sigaction(std.posix.SIG.INT, &handler, null);
+}
+
 /// Main entry point for quotez QOTD service
 pub fn main() !void {
     // Setup allocator
@@ -118,9 +152,12 @@ pub fn main() !void {
         .udp_port = cfg.udp_port,
     });
 
+    // Setup signal handlers for graceful shutdown
+    setupSignalHandlers();
+    log.info("signal_handlers_installed", .{});
+
     // Main event loop with poll() multiplexing
     // TODO: Implement file watcher integration (Phase 8)
-    // TODO: Implement proper signal handling (Phase 9)
 
     // Setup poll file descriptors
     var poll_fds = [_]std.posix.pollfd{
@@ -128,10 +165,11 @@ pub fn main() !void {
         .{ .fd = udp.getSocket(), .events = std.posix.POLL.IN, .revents = 0 },
     };
 
-    const running = true;
-    while (running) {
+    while (running.load(.seq_cst)) {
         // Wait for activity on either socket (100ms timeout)
         const poll_result = std.posix.poll(&poll_fds, 100) catch |err| {
+            // EINTR is expected when signal is received
+            if (err == error.Interrupted) continue;
             log.warn("poll_error", .{ .err = @errorName(err) });
             continue;
         };
@@ -157,8 +195,6 @@ pub fn main() !void {
         poll_fds[1].revents = 0;
 
         // TODO: Check for file changes at polling interval
-        // TODO: Implement graceful shutdown on SIGTERM/SIGINT
-        // For now, run indefinitely (will be interrupted by Ctrl+C)
     }
 
     log.info("service_shutdown", .{});

@@ -31,10 +31,12 @@ pub fn parse(allocator: std.mem.Allocator, content: []const u8, path: []const u8
 
             // Save previous quote if any
             if (current_quote) |quote_text| {
-                const formatted = if (current_author) |author|
-                    try std.fmt.allocPrint(allocator, "{s} — {s}", .{ quote_text, author })
-                else
-                    try allocator.dupe(u8, quote_text);
+                const formatted = if (current_author) |author| blk: {
+                    const result = try std.fmt.allocPrint(allocator, "{s} — {s}", .{ quote_text, author });
+                    allocator.free(author); // Free the author string
+                    break :blk result;
+                } else try allocator.dupe(u8, quote_text);
+                allocator.free(quote_text); // Free the quote string
                 try quotes.append(allocator, formatted);
                 current_quote = null;
                 current_author = null;
@@ -101,10 +103,12 @@ pub fn parse(allocator: std.mem.Allocator, content: []const u8, path: []const u8
 
     // Save any pending quote
     if (current_quote) |quote_text| {
-        const formatted = if (current_author) |author|
-            try std.fmt.allocPrint(allocator, "{s} — {s}", .{ quote_text, author })
-        else
-            try allocator.dupe(u8, quote_text);
+        const formatted = if (current_author) |author| blk: {
+            const result = try std.fmt.allocPrint(allocator, "{s} — {s}", .{ quote_text, author });
+            allocator.free(author); // Free the author string
+            break :blk result;
+        } else try allocator.dupe(u8, quote_text);
+        allocator.free(quote_text); // Free the quote string
         try quotes.append(allocator, formatted);
     }
 

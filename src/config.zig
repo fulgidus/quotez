@@ -128,6 +128,11 @@ const TomlParser = struct {
         if (self.directories) |*dirs| {
             dirs.deinit(self.allocator);
         }
+        // Free the mode string - it's only used to convert to enum, not stored in Configuration
+        if (self.mode) |mode_str| {
+            self.allocator.free(mode_str);
+        }
+        // Note: host is transferred to Configuration, so Configuration.deinit() frees it
     }
 
     pub fn parse(self: *TomlParser) !Configuration {

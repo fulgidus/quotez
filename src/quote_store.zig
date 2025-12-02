@@ -215,6 +215,12 @@ pub const QuoteStore = struct {
     pub fn count(self: *const QuoteStore) usize {
         return self.quotes.items.len;
     }
+
+    /// Add a single quote directly (for testing)
+    pub fn addQuote(self: *QuoteStore, content: []const u8) !void {
+        const quote = try Quote.init(self.allocator, content, null);
+        try self.quotes.append(self.allocator, quote);
+    }
 };
 
 // Unit tests
