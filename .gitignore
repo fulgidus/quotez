@@ -1,3 +1,35 @@
+# Zig build artifacts
 .zig-cache/
 zig-out/
 *.o
+*.a
+*.so
+*.exe
+*.dll
+*.dylib
+*.rlib
+*.prof*
+build/
+bin/
+obj/
+out/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs and temporary files
+*.log
+*.tmp
+
+# Environment files
+.env
+.env*
+quotez.toml.local
