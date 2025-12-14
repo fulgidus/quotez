@@ -190,16 +190,16 @@ Single project structure at repository root:
 
 **Purpose**: Final integration, deployment artifacts, and validation
 
-- [ ] T062 [P] Implement main entry point in src/main.zig with initialization sequence (config→logger→quote store→servers→event loop)
-- [ ] T063 [P] Add graceful shutdown handling (SIGTERM/SIGINT) in src/main.zig
-- [ ] T064 [P] Implement poll() multiplexing for TCP and UDP sockets in src/main.zig per research.md networking architecture
-- [ ] T065 [P] Add startup/shutdown logging per contracts/config-schema.md observability requirements
-- [ ] T066 [P] Add quote store build logging (files, quotes, duplicates) per data-model.md StoreMetadata
-- [ ] T067 [P] Create end-to-end integration test in tests/integration/end_to_end_test.zig (full service lifecycle)
+- [X] T062 [P] Implement main entry point in src/main.zig with initialization sequence (config→logger→quote store→servers→event loop)
+- [X] T063 [P] Add graceful shutdown handling (SIGTERM/SIGINT) in src/main.zig
+- [X] T064 [P] Implement poll() multiplexing for TCP and UDP sockets in src/main.zig per research.md networking architecture
+- [X] T065 [P] Add startup/shutdown logging per contracts/config-schema.md observability requirements
+- [X] T066 [P] Add quote store build logging (files, quotes, duplicates) per data-model.md StoreMetadata
+- [X] T067 [P] Create end-to-end integration test in tests/integration/end_to_end_test.zig (full service lifecycle)
 - [ ] T068 Verify static binary compilation with `zig build -Doptimize=ReleaseSmall -Dtarget=x86_64-linux-musl`
 - [ ] T069 Verify binary size < 5MB per spec.md success criteria SC-009
 - [ ] T070 Build Docker scratch image per quickstart.md and verify size < 10MB per spec.md SC-010
-- [ ] T071 [P] Create sample quotez.toml in repository root matching quickstart.md examples
+- [X] T071 [P] Create sample quotez.toml in repository root matching quickstart.md examples
 - [ ] T072 [P] Verify all quickstart.md deployment scenarios (Docker, local, Kubernetes examples)
 - [ ] T073 Run full test suite: `zig build test` (all unit and integration tests)
 - [ ] T074 Verify performance criteria: TCP/UDP response < 10ms, 100 concurrent connections, 10k quotes < 5s startup per spec.md SC-001 through SC-004

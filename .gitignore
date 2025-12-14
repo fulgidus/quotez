@@ -7,6 +7,12 @@ zig-out/
 *.exe
 *.dll
 *.dylib
+*.rlib
+*.prof*
+build/
+bin/
+obj/
+out/
 
 # IDE
 .vscode/
@@ -25,5 +31,5 @@ Thumbs.db
 
 # Environment files
 .env
-.env.local
+.env*
 quotez.toml.local
