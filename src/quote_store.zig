@@ -1,6 +1,12 @@
 const std = @import("std");
 const logger = @import("logger.zig");
 const config = @import("config.zig");
+const parser_mod = @import("parsers/parser.zig");
+const txt_parser = @import("parsers/txt.zig");
+const json_parser = @import("parsers/json.zig");
+const csv_parser = @import("parsers/csv.zig");
+const toml_parser = @import("parsers/toml.zig");
+const yaml_parser = @import("parsers/yaml.zig");
 
 /// Quote entity - immutable quote with content-based hash
 pub const Quote = struct {
@@ -154,7 +160,7 @@ pub const QuoteStore = struct {
         }
     }
 
-    /// Parse a single quote file (supports TXT format for now)
+    /// Parse a single quote file with format auto-detection
     fn parseQuoteFile(self: *QuoteStore, path: []const u8, seen: *std.AutoHashMap([32]u8, void)) !void {
         const file = try std.fs.cwd().openFile(path, .{});
         defer file.close();
@@ -162,16 +168,35 @@ pub const QuoteStore = struct {
         const content = try file.readToEndAlloc(self.allocator, 10 * 1024 * 1024); // 10MB max
         defer self.allocator.free(content);
 
-        // For MVP: treat as plaintext, split by newlines
-        var lines = std.mem.splitScalar(u8, content, '\n');
-        while (lines.next()) |line| {
-            const trimmed = std.mem.trim(u8, line, " \t\r");
-            if (trimmed.len == 0) continue; // Skip empty lines
+        // Detect format
+        const format = parser_mod.detectFormat(path, content);
 
-            // Try to create quote
-            const quote = Quote.init(self.allocator, trimmed, path) catch |err| {
+        // Select appropriate parser
+        const selected_parser = switch (format) {
+            .json => json_parser.jsonParser,
+            .csv => csv_parser.csvParser,
+            .toml => toml_parser.tomlParser,
+            .yaml => yaml_parser.yamlParser,
+            .plaintext => txt_parser.txtParser,
+        };
+
+        // Parse the file
+        var parse_result = selected_parser.parse(self.allocator, content) catch |err| {
+            self.log.err("file_parse_error", .{ 
+                .path = path, 
+                .format = @tagName(format),
+                .err = @errorName(err) 
+            });
+            return err;
+        };
+        defer parse_result.deinit();
+
+        // Add quotes to store
+        for (parse_result.quotes.items) |quote_content| {
+            // Create quote with hash
+            const quote = Quote.init(self.allocator, quote_content, path) catch |err| {
                 if (err != error.EmptyQuote) {
-                    self.log.warn("quote_parse_failed", .{ .path = path, .err = @errorName(err) });
+                    self.log.warn("quote_init_failed", .{ .path = path, .err = @errorName(err) });
                 }
                 continue;
             };

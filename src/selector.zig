@@ -40,6 +40,7 @@ pub const Selector = struct {
     mode: SelectionMode,
     state: SelectorState,
     allocator: std.mem.Allocator,
+    quote_count: usize,
 
     /// Initialize selector with given mode
     pub fn init(allocator: std.mem.Allocator, mode: SelectionMode, quote_count: usize) !Selector {
@@ -94,6 +95,7 @@ pub const Selector = struct {
             .mode = mode,
             .state = state,
             .allocator = allocator,
+            .quote_count = quote_count,
         };
     }
 
@@ -111,14 +113,14 @@ pub const Selector = struct {
     }
 
     /// Get next quote index
-    pub fn next(self: *Selector, quote_count: usize) ?usize {
-        if (quote_count == 0) return null;
+    pub fn next(self: *Selector) ?usize {
+        if (self.quote_count == 0) return null;
 
         return switch (self.state) {
-            .random => |*state| self.selectRandom(state, quote_count),
-            .sequential => |*state| self.selectSequential(state, quote_count),
-            .random_no_repeat => |*state| self.selectRandomNoRepeat(state, quote_count),
-            .shuffle_cycle => |*state| self.selectShuffleCycle(state, quote_count),
+            .random => |*state| self.selectRandom(state, self.quote_count),
+            .sequential => |*state| self.selectSequential(state, self.quote_count),
+            .random_no_repeat => |*state| self.selectRandomNoRepeat(state, self.quote_count),
+            .shuffle_cycle => |*state| self.selectShuffleCycle(state, self.quote_count),
         };
     }
 
@@ -197,6 +199,8 @@ pub const Selector = struct {
 
     /// Reset selector state (called after quote store rebuild)
     pub fn reset(self: *Selector, new_quote_count: usize) !void {
+        self.quote_count = new_quote_count;
+        
         switch (self.state) {
             .random => {
                 // Random is stateless, nothing to reset
@@ -239,11 +243,11 @@ test "sequential mode basic operation" {
     defer selector.deinit();
 
     // Should return 0, 1, 2, 0, 1, 2, ...
-    try std.testing.expectEqual(@as(usize, 0), selector.next(3).?);
-    try std.testing.expectEqual(@as(usize, 1), selector.next(3).?);
-    try std.testing.expectEqual(@as(usize, 2), selector.next(3).?);
-    try std.testing.expectEqual(@as(usize, 0), selector.next(3).?); // Wraparound
-    try std.testing.expectEqual(@as(usize, 1), selector.next(3).?);
+    try std.testing.expectEqual(@as(usize, 0), selector.next().?);
+    try std.testing.expectEqual(@as(usize, 1), selector.next().?);
+    try std.testing.expectEqual(@as(usize, 2), selector.next().?);
+    try std.testing.expectEqual(@as(usize, 0), selector.next().?); // Wraparound
+    try std.testing.expectEqual(@as(usize, 1), selector.next().?);
 }
 
 test "sequential mode with single quote" {
@@ -251,9 +255,9 @@ test "sequential mode with single quote" {
     var selector = try Selector.init(allocator, .sequential, 1);
     defer selector.deinit();
 
-    try std.testing.expectEqual(@as(usize, 0), selector.next(1).?);
-    try std.testing.expectEqual(@as(usize, 0), selector.next(1).?);
-    try std.testing.expectEqual(@as(usize, 0), selector.next(1).?);
+    try std.testing.expectEqual(@as(usize, 0), selector.next().?);
+    try std.testing.expectEqual(@as(usize, 0), selector.next().?);
+    try std.testing.expectEqual(@as(usize, 0), selector.next().?);
 }
 
 test "random mode returns valid indices" {
@@ -264,7 +268,7 @@ test "random mode returns valid indices" {
     // Test 100 selections
     var i: usize = 0;
     while (i < 100) : (i += 1) {
-        const index = selector.next(10).?;
+        const index = selector.next().?;
         try std.testing.expect(index < 10);
     }
 }
@@ -280,7 +284,7 @@ test "random-no-repeat exhaustion and reset" {
     // First cycle: should see all 3 quotes
     var i: usize = 0;
     while (i < 3) : (i += 1) {
-        const index = selector.next(3).?;
+        const index = selector.next().?;
         try seen.put(index, {});
     }
     try std.testing.expectEqual(@as(usize, 3), seen.count());
@@ -289,7 +293,7 @@ test "random-no-repeat exhaustion and reset" {
     seen.clearRetainingCapacity();
     i = 0;
     while (i < 3) : (i += 1) {
-        const index = selector.next(3).?;
+        const index = selector.next().?;
         try seen.put(index, {});
     }
     try std.testing.expectEqual(@as(usize, 3), seen.count());
@@ -306,7 +310,7 @@ test "shuffle-cycle full cycle uniqueness" {
     // One full cycle should contain all quotes exactly once
     var i: usize = 0;
     while (i < 5) : (i += 1) {
-        const index = selector.next(5).?;
+        const index = selector.next().?;
         try std.testing.expect(!seen.contains(index)); // Should not repeat
         try seen.put(index, {});
     }
@@ -319,9 +323,9 @@ test "shuffle-cycle reshuffle on exhaustion" {
     defer selector.deinit();
 
     // Complete first cycle
-    _ = selector.next(3);
-    _ = selector.next(3);
-    _ = selector.next(3);
+    _ = selector.next();
+    _ = selector.next();
+    _ = selector.next();
 
     // Next should start new shuffled cycle
     var seen = std.AutoHashMap(usize, void).init(allocator);
@@ -329,7 +333,7 @@ test "shuffle-cycle reshuffle on exhaustion" {
 
     var i: usize = 0;
     while (i < 3) : (i += 1) {
-        const index = selector.next(3).?;
+        const index = selector.next().?;
         try seen.put(index, {});
     }
     try std.testing.expectEqual(@as(usize, 3), seen.count());
@@ -341,14 +345,14 @@ test "selector reset" {
     defer selector.deinit();
 
     // Advance position
-    _ = selector.next(5);
-    _ = selector.next(5);
+    _ = selector.next();
+    _ = selector.next();
 
     // Reset
     try selector.reset(5);
 
     // Should restart from 0
-    try std.testing.expectEqual(@as(usize, 0), selector.next(5).?);
+    try std.testing.expectEqual(@as(usize, 0), selector.next().?);
 }
 
 test "empty quote store handling" {
@@ -356,5 +360,5 @@ test "empty quote store handling" {
     var selector = try Selector.init(allocator, .random, 0);
     defer selector.deinit();
 
-    try std.testing.expectEqual(@as(?usize, null), selector.next(0));
+    try std.testing.expectEqual(@as(?usize, null), selector.next());
 }
