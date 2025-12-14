@@ -105,8 +105,12 @@ pub fn main() !void {
 
     // TODO: Phase 8 - Start file watcher for hot reload
 
+    // Setup signal handling for graceful shutdown
+    var shutdown_requested = std.atomic.Value(bool).init(false);
+    try setupSignalHandlers(&shutdown_requested);
+
     // Run event loop with poll() for both TCP and UDP
-    runEventLoop(&tcp, &udp, &log) catch |err| {
+    runEventLoop(&tcp, &udp, &log, &shutdown_requested) catch |err| {
         log.err("fatal", .{
             .reason = "event loop error",
             .err = @errorName(err),
@@ -114,7 +118,39 @@ pub fn main() !void {
         std.process.exit(1);
     };
 
-    log.info("shutdown", .{ .reason = "server stopped" });
+    log.info("shutdown", .{ .reason = "graceful shutdown complete" });
+}
+
+/// Setup signal handlers for graceful shutdown
+fn setupSignalHandlers(shutdown_requested: *std.atomic.Value(bool)) !void {
+    // Register SIGTERM handler
+    const sigterm_action = std.posix.Sigaction{
+        .handler = .{ .handler = handleShutdownSignal },
+        .mask = std.posix.empty_sigset,
+        .flags = 0,
+    };
+    try std.posix.sigaction(std.posix.SIG.TERM, &sigterm_action, null);
+
+    // Register SIGINT handler (Ctrl+C)
+    const sigint_action = std.posix.Sigaction{
+        .handler = .{ .handler = handleShutdownSignal },
+        .mask = std.posix.empty_sigset,
+        .flags = 0,
+    };
+    try std.posix.sigaction(std.posix.SIG.INT, &sigint_action, null);
+
+    // Store the shutdown flag pointer for signal handlers
+    shutdown_flag = shutdown_requested;
+}
+
+/// Global shutdown flag for signal handlers
+var shutdown_flag: ?*std.atomic.Value(bool) = null;
+
+/// Signal handler for SIGTERM and SIGINT
+fn handleShutdownSignal(_: c_int) callconv(.C) void {
+    if (shutdown_flag) |flag| {
+        flag.store(true, .seq_cst);
+    }
 }
 
 /// Event loop using poll() to multiplex TCP and UDP servers
@@ -122,6 +158,7 @@ fn runEventLoop(
     tcp: *tcp_server.TcpServer,
     udp: *udp_server.UdpServer,
     log: *logger.Logger,
+    shutdown_requested: *std.atomic.Value(bool),
 ) !void {
     log.info("event_loop_started", .{
         .tcp_fd = tcp.socket.stream.handle,
@@ -143,9 +180,19 @@ fn runEventLoop(
     };
 
     // Event loop
-    while (true) {
-        // Wait for events on either socket (timeout: -1 = infinite)
-        const ready = try std.posix.poll(&poll_fds, -1);
+    while (!shutdown_requested.load(.seq_cst)) {
+        // Wait for events on either socket (timeout: 1000ms to check shutdown flag periodically)
+        const ready = std.posix.poll(&poll_fds, 1000) catch |err| {
+            // Interrupted by signal is expected during shutdown
+            if (err == error.SignalInterrupt) {
+                if (shutdown_requested.load(.seq_cst)) {
+                    log.info("shutdown_signal_received", .{});
+                    break;
+                }
+                continue;
+            }
+            return err;
+        };
 
         if (ready == 0) continue; // Timeout (shouldn't happen with infinite timeout)
 
