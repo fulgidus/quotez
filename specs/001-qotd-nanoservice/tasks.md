@@ -65,17 +65,17 @@ Single project structure at repository root:
 
 ### Implementation for User Story 3
 
-- [ ] T015 [P] [US3] Create parser interface/trait in src/parsers/parser.zig with common parse() signature
-- [ ] T016 [P] [US3] Implement plaintext parser in src/parsers/txt.zig per contracts/quote-formats.md (split by newlines, trim whitespace)
-- [ ] T017 [P] [US3] Implement JSON parser in src/parsers/json.zig using std.json.parseFromSlice per contracts/quote-formats.md
-- [ ] T018 [P] [US3] Implement CSV parser in src/parsers/csv.zig with delimiter detection per contracts/quote-formats.md
-- [ ] T019 [P] [US3] Implement TOML parser in src/parsers/toml.zig (inline minimal parser or zig-toml) per contracts/quote-formats.md
-- [ ] T020 [P] [US3] Implement YAML parser in src/parsers/yaml.zig (minimal subset support) per contracts/quote-formats.md
-- [ ] T021 [US3] Implement format detection chain in src/parsers/parser.zig (JSON→CSV→TOML→YAML→plaintext order) per contracts/quote-formats.md
-- [ ] T022 [US3] Add unit tests for each parser in their respective files (malformed input, empty files, UTF-8 edge cases)
-- [ ] T023 [US3] Integrate parsers with QuoteStore.build() method in src/quote_store.zig (directory walking, file parsing, deduplication)
-- [ ] T024 [US3] Add QuoteStore.build() integration tests in src/quote_store.zig verifying multi-format loading and deduplication
-- [ ] T025 [US3] Implement UTF-8 normalization and whitespace trimming in quote loading per contracts/quote-formats.md universal rules
+- [X] T015 [P] [US3] Create parser interface/trait in src/parsers/parser.zig with common parse() signature
+- [X] T016 [P] [US3] Implement plaintext parser in src/parsers/txt.zig per contracts/quote-formats.md (split by newlines, trim whitespace)
+- [X] T017 [P] [US3] Implement JSON parser in src/parsers/json.zig using std.json.parseFromSlice per contracts/quote-formats.md
+- [X] T018 [P] [US3] Implement CSV parser in src/parsers/csv.zig with delimiter detection per contracts/quote-formats.md
+- [X] T019 [P] [US3] Implement TOML parser in src/parsers/toml.zig (inline minimal parser or zig-toml) per contracts/quote-formats.md
+- [X] T020 [P] [US3] Implement YAML parser in src/parsers/yaml.zig (minimal subset support) per contracts/quote-formats.md
+- [X] T021 [US3] Implement format detection chain in src/parsers/parser.zig (JSON→CSV→TOML→YAML→plaintext order) per contracts/quote-formats.md
+- [X] T022 [US3] Add unit tests for each parser in their respective files (malformed input, empty files, UTF-8 edge cases)
+- [X] T023 [US3] Integrate parsers with QuoteStore.build() method in src/quote_store.zig (directory walking, file parsing, deduplication)
+- [X] T024 [US3] Add QuoteStore.build() integration tests in src/quote_store.zig verifying multi-format loading and deduplication
+- [X] T025 [US3] Implement UTF-8 normalization and whitespace trimming in quote loading per contracts/quote-formats.md universal rules
 
 **Checkpoint**: At this point, User Story 3 should be fully functional - quotes load from all 5 formats with deduplication
 
@@ -91,11 +91,11 @@ Single project structure at repository root:
 
 ### Implementation for User Story 6
 
-- [ ] T026 [US6] Extend Configuration validation in src/config.zig to check port ranges, positive intervals, valid mode enums per contracts/config-schema.md
-- [ ] T027 [US6] Implement fatal error handling for missing required fields (directories) with clear exit messages in src/config.zig
-- [ ] T028 [US6] Implement default application for optional fields (ports, interval, mode) with WARNING logs in src/config.zig
-- [ ] T029 [US6] Add comprehensive Configuration validation tests in src/config.zig covering all edge cases from contracts/config-schema.md
-- [ ] T030 [US6] Update main.zig to load Configuration from quotez.toml on startup and handle config errors
+- [X] T026 [US6] Extend Configuration validation in src/config.zig to check port ranges, positive intervals, valid mode enums per contracts/config-schema.md
+- [X] T027 [US6] Implement fatal error handling for missing required fields (directories) with clear exit messages in src/config.zig
+- [X] T028 [US6] Implement default application for optional fields (ports, interval, mode) with WARNING logs in src/config.zig
+- [X] T029 [US6] Add comprehensive Configuration validation tests in src/config.zig covering all edge cases from contracts/config-schema.md
+- [X] T030 [US6] Create main.zig to load Configuration from quotez.toml on startup and handle config errors
 
 **Checkpoint**: At this point, User Story 6 should be fully functional - service reads and validates configuration correctly
 
@@ -111,13 +111,13 @@ Single project structure at repository root:
 
 ### Implementation for User Story 1
 
-- [ ] T031 [P] [US1] Implement NetworkServer struct in src/servers/tcp.zig with tcp_socket, tcp_addr, and quote_store pointer per data-model.md NetworkServer entity
-- [ ] T032 [US1] Implement TCP socket binding and listen in src/servers/tcp.zig per contracts/qotd-protocol.md TCP implementation
-- [ ] T033 [US1] Implement TCP accept-send-close loop in src/servers/tcp.zig (accept connection, get quote from store, send with newline, close)
-- [ ] T034 [US1] Handle empty quote store case in src/servers/tcp.zig (close immediately without sending) per contracts/qotd-protocol.md
-- [ ] T035 [US1] Add TCP error handling (ECONNRESET, EPIPE, EAGAIN) per contracts/qotd-protocol.md network errors
-- [ ] T036 [US1] Integrate TCP server with main event loop in src/main.zig
-- [ ] T037 [US1] Create integration test in tests/integration/protocol_test.zig for TCP RFC 865 compliance (spawn subprocess, connect, verify quote, verify close)
+- [X] T031 [P] [US1] Implement NetworkServer struct in src/servers/tcp.zig with tcp_socket, tcp_addr, and quote_store pointer per data-model.md NetworkServer entity
+- [X] T032 [US1] Implement TCP socket binding and listen in src/servers/tcp.zig per contracts/qotd-protocol.md TCP implementation
+- [X] T033 [US1] Implement TCP accept-send-close loop in src/servers/tcp.zig (accept connection, get quote from store, send with newline, close)
+- [X] T034 [US1] Handle empty quote store case in src/servers/tcp.zig (close immediately without sending) per contracts/qotd-protocol.md
+- [X] T035 [US1] Add TCP error handling (ECONNRESET, EPIPE, EAGAIN) per contracts/qotd-protocol.md network errors
+- [X] T036 [US1] Integrate TCP server with main event loop in src/main.zig
+- [X] T037 [US1] Create integration test in tests/integration/protocol_test.zig for TCP RFC 865 compliance (spawn subprocess, connect, verify quote, verify close)
 
 **Checkpoint**: At this point, User Story 1 should be fully functional - TCP QOTD server works independently
 
@@ -131,13 +131,13 @@ Single project structure at repository root:
 
 ### Implementation for User Story 2
 
-- [ ] T038 [P] [US2] Extend NetworkServer struct in src/servers/udp.zig with udp_socket and udp_addr per data-model.md
-- [ ] T039 [US2] Implement UDP socket binding in src/servers/udp.zig per contracts/qotd-protocol.md UDP implementation
-- [ ] T040 [US2] Implement UDP recvfrom-sendto handler in src/servers/udp.zig (receive datagram, ignore content, get quote, sendto response)
-- [ ] T041 [US2] Handle empty quote store case in src/servers/udp.zig (silent drop, no response) per contracts/qotd-protocol.md
-- [ ] T042 [US2] Add UDP error handling (EMSGSIZE, EAGAIN) per contracts/qotd-protocol.md
-- [ ] T043 [US2] Integrate UDP server with main event loop using poll() multiplexing in src/main.zig
-- [ ] T044 [US2] Create integration test in tests/integration/protocol_test.zig for UDP RFC 865 compliance
+- [X] T038 [P] [US2] Extend NetworkServer struct in src/servers/udp.zig with udp_socket and udp_addr per data-model.md
+- [X] T039 [US2] Implement UDP socket binding in src/servers/udp.zig per contracts/qotd-protocol.md UDP implementation
+- [X] T040 [US2] Implement UDP recvfrom-sendto handler in src/servers/udp.zig (receive datagram, ignore content, get quote, sendto response)
+- [X] T041 [US2] Handle empty quote store case in src/servers/udp.zig (silent drop, no response) per contracts/qotd-protocol.md
+- [X] T042 [US2] Add UDP error handling (EMSGSIZE, EAGAIN) per contracts/qotd-protocol.md
+- [X] T043 [US2] Integrate UDP server with main event loop using poll() multiplexing in src/main.zig
+- [X] T044 [US2] Create integration test in tests/integration/protocol_test.zig for UDP RFC 865 compliance
 
 **Checkpoint**: At this point, User Stories 1 AND 2 should both work independently - TCP and UDP servers coexist
 
@@ -151,13 +151,13 @@ Single project structure at repository root:
 
 ### Implementation for User Story 5
 
-- [ ] T045 [US5] Verify Selector random mode implementation in src/selector.zig (already in Phase 2, add edge case tests)
-- [ ] T046 [US5] Implement Selector sequential wraparound logic in src/selector.zig per data-model.md sequential state machine
-- [ ] T047 [US5] Implement Selector random-no-repeat exhausted set management in src/selector.zig per data-model.md
-- [ ] T048 [US5] Implement Selector shuffle-cycle Fisher-Yates shuffle and reshuffle triggers in src/selector.zig
-- [ ] T049 [US5] Implement Selector reset logic for all modes on QuoteStore rebuild per spec.md clarifications
-- [ ] T050 [US5] Add integration tests in tests/integration/selector_test.zig for each mode's behavior over multiple requests
-- [ ] T051 [US5] Verify Configuration.selection_mode integration with Selector initialization in src/main.zig
+- [X] T045 [US5] Verify Selector random mode implementation in src/selector.zig (already in Phase 2, add edge case tests)
+- [X] T046 [US5] Implement Selector sequential wraparound logic in src/selector.zig per data-model.md sequential state machine
+- [X] T047 [US5] Implement Selector random-no-repeat exhausted set management in src/selector.zig per data-model.md
+- [X] T048 [US5] Implement Selector shuffle-cycle Fisher-Yates shuffle and reshuffle triggers in src/selector.zig
+- [X] T049 [US5] Implement Selector reset logic for all modes on QuoteStore rebuild per spec.md clarifications
+- [X] T050 [US5] Add integration tests in tests/integration/selector_test.zig for each mode's behavior over multiple requests
+- [X] T051 [US5] Verify Configuration.selection_mode integration with Selector initialization in src/main.zig
 
 **Checkpoint**: All selection modes should work independently and switch correctly based on config
 
