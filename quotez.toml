@@ -1,0 +1,33 @@
+# quotez Configuration File
+# This file is loaded once at startup (no hot reload in MVP)
+
+[server]
+# IP address or hostname to bind to
+# Default: "0.0.0.0" (all interfaces)
+host = "0.0.0.0"
+
+# TCP port for QOTD protocol
+# Default: 17 (standard QOTD port, requires root/CAP_NET_BIND_SERVICE)
+tcp_port = 17
+
+# UDP port for QOTD protocol
+# Default: 17 (can be same as TCP port)
+udp_port = 17
+
+[quotes]
+# Directories to scan for quote files (REQUIRED)
+# Supports: .txt, .json, .csv, .toml, .yaml formats
+# Directories are scanned recursively
+directories = [
+    "tests/fixtures/quotes"
+]
+
+# Quote selection mode (optional)
+# Options: "random", "sequential", "random-no-repeat", "shuffle-cycle"
+# Default: "random"
+mode = "random"
+
+[polling]
+# How often to check for file changes (seconds)
+# Default: 60
+interval_seconds = 60
