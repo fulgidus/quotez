@@ -74,7 +74,7 @@ pub const Configuration = struct {
         defer parser.deinit();
 
         var config = try parser.parse();
-        
+
         // Log loaded configuration
         log.info("config_loaded", .{
             .file = path,
@@ -126,8 +126,13 @@ const TomlParser = struct {
 
     pub fn deinit(self: *TomlParser) void {
         if (self.directories) |*dirs| {
-            dirs.deinit();
+            dirs.deinit(self.allocator);
         }
+        // Free the mode string - it's only used to convert to enum, not stored in Configuration
+        if (self.mode) |mode_str| {
+            self.allocator.free(mode_str);
+        }
+        // Note: host is transferred to Configuration, so Configuration.deinit() frees it
     }
 
     pub fn parse(self: *TomlParser) !Configuration {
@@ -154,12 +159,12 @@ const TomlParser = struct {
         }
 
         // Apply defaults and build configuration
-        var config = Configuration{
+        const config = Configuration{
             .allocator = self.allocator,
             .host = self.host orelse try self.allocator.dupe(u8, Configuration.Defaults.host),
             .tcp_port = self.tcp_port orelse Configuration.Defaults.tcp_port,
             .udp_port = self.udp_port orelse Configuration.Defaults.udp_port,
-            .directories = try self.directories.?.toOwnedSlice(),
+            .directories = try self.directories.?.toOwnedSlice(self.allocator),
             .selection_mode = blk: {
                 if (self.mode) |mode_str| {
                     if (SelectionMode.fromString(mode_str)) |mode| {
@@ -313,13 +318,13 @@ const TomlParser = struct {
             return error.ExpectedArray;
         }
         self.pos += 1; // Skip '['
-        
-        var array = std.ArrayList([]const u8).init(self.allocator);
+
+        var array = std.ArrayList([]const u8).initCapacity(self.allocator, 4) catch return error.OutOfMemory;
         errdefer {
             for (array.items) |item| {
                 self.allocator.free(item);
             }
-            array.deinit();
+            array.deinit(self.allocator);
         }
 
         while (true) {
@@ -334,7 +339,7 @@ const TomlParser = struct {
                 continue;
             }
             const item = try self.parseString();
-            try array.append(item);
+            try array.append(self.allocator, item);
         }
 
         return array;
