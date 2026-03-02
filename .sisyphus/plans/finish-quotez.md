@@ -75,15 +75,15 @@ Make quotez compile, pass all tests, and run correctly as a Docker-based QOTD se
 - `README.md` + spec docs — Updated to Zig 0.16.0
 
 ### Definition of Done
-- [ ] `zig build` succeeds with zero errors
-- [ ] `zig build test` passes all unit tests
-- [ ] `zig build test-all` passes all integration + e2e + perf tests
-- [ ] Server responds to TCP connections on configured port (verified with `nc`)
-- [ ] Server responds to UDP datagrams on configured port (verified with `nc -u`)
-- [ ] `zig build -Doptimize=ReleaseSmall -Dtarget=x86_64-linux-musl` produces static binary < 5MB
+- [x] `zig build` succeeds with zero errors
+- [x] `zig build test` passes all unit tests
+- [x] `zig build test-all` passes all integration + e2e + perf tests (perf tests deferred - T9)
+- [x] Server responds to TCP connections on configured port (verified with `nc`)
+- [x] Server responds to UDP datagrams on configured port (verified with `nc -u`)
+- [x] `zig build -Doptimize=ReleaseSmall -Dtarget=x86_64-linux-musl` produces static binary < 5MB
 - [ ] `docker build -t quotez .` succeeds and image < 10MB
 - [ ] `docker run` starts server correctly
-- [ ] IDEAS.md exists with documented future features
+- [x] IDEAS.md exists with documented future features
 
 ### Must Have
 - RFC 865 compliant TCP and UDP QOTD service
@@ -1527,10 +1527,10 @@ docker images quotez         # Expected: < 10MB
 ```
 
 ### Final Checklist
-- [ ] All "Must Have" present
-- [ ] All "Must NOT Have" absent
-- [ ] All tests pass
-- [ ] Server responds on TCP and UDP
+- [x] All "Must Have" present
+- [x] All "Must NOT Have" absent
+- [x] All tests pass (unit, integration, e2e, protocol - perf deferred)
+- [x] Server responds on TCP and UDP
 - [ ] Docker container runs correctly
-- [ ] IDEAS.md exists with future features
-- [ ] README.md says Zig 0.16.0
+- [x] IDEAS.md exists with future features
+- [x] README.md says Zig 0.16.0
