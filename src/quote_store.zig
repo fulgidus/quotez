@@ -171,7 +171,7 @@ pub const QuoteStore = struct {
         defer file.close();
 
         // Read file using Zig 0.16 API (read via Dir instead of File)
-        const content = try std.fs.cwd().readFileAlloc(path, self.allocator, std.Io.Limit.limited(10 * 1024 * 1024)); // 10MB max
+        const content = try std.fs.cwd().readFileAlloc(self.allocator, path, 10 * 1024 * 1024); // 10MB max
         defer self.allocator.free(content);
 
         // Detect format
