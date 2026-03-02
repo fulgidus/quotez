@@ -3,10 +3,23 @@ const logger = @import("../logger.zig");
 const quote_store = @import("../quote_store.zig");
 const selector_mod = @import("../selector.zig");
 
+fn parseIpv4(host: []const u8) !u32 {
+    var bytes: [4]u8 = undefined;
+    var i: usize = 0;
+    var it = std.mem.splitScalar(u8, host, '.');
+    while (it.next()) |part| {
+        if (i >= 4) return error.InvalidAddress;
+        bytes[i] = try std.fmt.parseInt(u8, part, 10);
+        i += 1;
+    }
+    if (i != 4) return error.InvalidAddress;
+    return @as(u32, @bitCast(bytes));
+}
+
 /// UDP QOTD server implementing RFC 865
 pub const UdpServer = struct {
     socket: std.posix.socket_t,
-    address: std.net.Address,
+    address: std.posix.sockaddr.in,
     store: *quote_store.QuoteStore,
     selector: *selector_mod.Selector,
     log: logger.Logger,
@@ -26,7 +39,7 @@ pub const UdpServer = struct {
         var log = logger.Logger.init();
 
         // Parse address
-        const address = std.net.Address.parseIp(host, port) catch |err| {
+        const addr_bytes = parseIpv4(host) catch |err| {
             log.err("udp_bind_failed", .{
                 .reason = "invalid address",
                 .host = host,
@@ -36,9 +49,16 @@ pub const UdpServer = struct {
             return err;
         };
 
+        const address = std.posix.sockaddr.in{
+            .family = std.posix.AF.INET,
+            .port = std.mem.nativeToBig(u16, port),
+            .addr = addr_bytes,
+            .zero = [_]u8{0} ** 8,
+        };
+
         // Create UDP socket
         const socket = try std.posix.socket(
-            address.any.family,
+            address.family,
             std.posix.SOCK.DGRAM,
             std.posix.IPPROTO.UDP,
         );
@@ -53,11 +73,12 @@ pub const UdpServer = struct {
         );
 
         // Bind socket
-        try std.posix.bind(socket, &address.any, address.getOsSockLen());
+        try std.posix.bind(socket, @ptrCast(&address), @sizeOf(std.posix.sockaddr.in));
 
         // Set non-blocking mode for event loop
         const flags = try std.posix.fcntl(socket, std.posix.F.GETFL, 0);
-        _ = try std.posix.fcntl(socket, std.posix.F.SETFL, flags | std.posix.O.NONBLOCK);
+        const nonblock_flag = @as(usize, @as(u32, @bitCast(std.posix.O{ .NONBLOCK = true })));
+        _ = try std.posix.fcntl(socket, std.posix.F.SETFL, flags | nonblock_flag);
 
         log.info("udp_server_started", .{
             .host = host,
@@ -84,15 +105,15 @@ pub const UdpServer = struct {
     pub fn receiveAndRespond(self: *UdpServer) !void {
         // Buffer for receiving client datagram (content ignored per RFC 865)
         var recv_buf: [MAX_DATAGRAM_SIZE]u8 = undefined;
-        var client_addr: std.posix.sockaddr = undefined;
-        var client_addr_len: std.posix.socklen_t = @sizeOf(std.posix.sockaddr);
+        var client_addr: std.posix.sockaddr.storage = undefined;
+        var client_addr_len: std.posix.socklen_t = @sizeOf(std.posix.sockaddr.storage);
 
         // Receive datagram from client
         const recv_len = std.posix.recvfrom(
             self.socket,
             &recv_buf,
             0,
-            &client_addr,
+            @ptrCast(&client_addr),
             &client_addr_len,
         ) catch |err| {
             switch (err) {
@@ -151,7 +172,7 @@ pub const UdpServer = struct {
             self.socket,
             response,
             0,
-            &client_addr,
+            @ptrCast(&client_addr),
             client_addr_len,
         ) catch |err| {
             // UDP is best-effort, log and drop on error
@@ -203,7 +224,7 @@ test "udp server initialization" {
     defer server.deinit();
 
     // Server should be initialized
-    try std.testing.expectEqual(@as(u16, 8017), server.address.getPort());
+    try std.testing.expectEqual(@as(u16, 8017), std.mem.bigToNative(u16, server.address.port));
 }
 
 test "udp receive with empty store" {
