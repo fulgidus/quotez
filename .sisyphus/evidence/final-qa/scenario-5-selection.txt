@@ -1,0 +1,58 @@
+=== SCENARIO 5: SELECTION MODES ===
+
+Test 1: Sequential Mode
+Configuration: mode = "sequential"
+Results (first 10 requests):
+1. Success is not final, failure is not fatal.
+2. It always seems impossible until it's done.
+3. The only limit to our realization of tomorrow is our doubts of today.
+4. Innovation distinguishes between a leader and a follower.
+5. Be yourself; everyone else is already taken.
+6. Two things are infinite: the universe and human stupidity.
+7. The best time to plant a tree was 20 years ago. The second best time is now.
+8. In three words I can sum up everything I've learned about life: it goes on.
+9. The purpose of our lives is to be happy.
+10. Life is really simple, but we insist on making it complicated.
+
+✓ Sequential ordering maintained
+✓ No randomness, predictable sequence
+
+Test 2: Shuffle-Cycle Mode
+Configuration: mode = "shuffle-cycle"
+Results (25 requests analyzed):
+- 19 unique quotes total
+- Each quote appeared 1-2 times in 25 requests
+- Distribution: 6 quotes appeared twice (after completing first cycle), rest once
+- After 19 requests (one full cycle), shuffles and starts new cycle
+
+✓ All quotes served before repeating
+✓ Random order within each cycle
+✓ Fair distribution across cycles
+
+Test 3: Random-No-Repeat Mode
+Configuration: mode = "random-no-repeat"
+Results (19 requests - exact quote count):
+- 19 unique quotes delivered
+- NO duplicates in 19 consecutive requests
+- All quotes from pool served exactly once
+
+✓ Perfect uniqueness within pool size
+✓ Random ordering maintained
+✓ Guarantees variety until pool exhausted
+
+Test 4: Random Mode (Baseline)
+Configuration: mode = "random"
+Results (from Scenario 1 & 2):
+- Quotes repeated within 10 requests
+- Pure random selection allows duplicates
+- More variety possible but no guarantees
+
+✓ True randomness with possible repeats
+
+Summary:
+✓ All 4 selection modes operational
+✓ Each mode exhibits correct behavior:
+  - random: pure randomness, allows repeats
+  - sequential: ordered, predictable
+  - random-no-repeat: unique within pool size
+  - shuffle-cycle: random cycles through all quotes

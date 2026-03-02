@@ -1,0 +1,35 @@
+=== SCENARIO 4: HOT RELOAD ===
+
+Initial State:
+- Server started at timestamp 87339994
+- 19 unique quotes loaded from 5 files
+- Polling interval: 60 seconds
+
+Test Actions:
+1. Added tests/fixtures/quotes/hotreload-test.txt with 2 new quotes
+2. File added at Mon Mar 2 10:11:33 CET 2026
+3. Waited 65 seconds (exceeds 60s polling interval)
+
+Hot Reload Logs:
+[87400821] INFO hot_reload_triggered
+[87400825] INFO quote_store_built files=6 quotes=23 duplicates_removed=2 unique=21
+[87400825] INFO hot_reload_complete quotes=21
+
+Verification:
+✓ Hot reload triggered automatically after 60 seconds
+✓ New file detected: 5 files → 6 files
+✓ Quote count increased: 19 quotes → 21 quotes
+✓ New quotes served in responses (verified via 20 TCP requests)
+✓ Server did not restart (continuous operation)
+
+Timeline:
+- 87339994 (0s): Server startup
+- 87348563 (8.5s): First TCP request served
+- 87400821 (60.8s): Hot reload triggered
+- 87400825 (60.8s): Hot reload complete
+
+Results:
+✓ File system polling works correctly
+✓ Changes detected within polling interval
+✓ Quote store rebuilt without downtime
+✓ New content immediately available after reload

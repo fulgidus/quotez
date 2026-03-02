@@ -1,0 +1,43 @@
+[PERF] 10000 selections in 1.32ms (0.13μs/selection)
+error: 'perf_test.test.PERF: 10k quotes load in < 5s' failed:
+       [90636996] INFO tcp_server_started host=127.0.0.1 port=21017
+       [90636996] DEBUG tcp_request_served quote_length=50
+       [90636996] DEBUG tcp_request_served quote_length=50
+       [90636996] DEBUG tcp_request_served quote_length=50
+       [90636997] DEBUG tcp_request_served quote_length=50
+       [90636997] DEBUG tcp_request_served quote_length=50
+       [90636997] DEBUG tcp_request_served quote_length=50
+       [90636997] DEBUG tcp_request_served quote_length=50
+       [90636997] DEBUG tcp_request_served quote_length=50
+       [90636997] DEBUG tcp_request_served quote_length=50
+--
+       [PERF] TCP: avg=0.04ms max=0.13ms over 100 requests
+       [90637001] INFO tcp_server_stopped
+       [90637001] INFO udp_server_started host=127.0.0.1 port=21018
+       [90637001] DEBUG udp_datagram_received bytes=0
+       [90637001] DEBUG udp_request_served quote_length=50
+       [90637001] DEBUG udp_datagram_received bytes=0
+       [90637001] DEBUG udp_request_served quote_length=50
+       [90637001] DEBUG udp_datagram_received bytes=0
+       [90637001] DEBUG udp_request_served quote_length=50
+       [90637001] DEBUG udp_datagram_received bytes=0
+       [90637001] DEBUG udp_request_served quote_length=50
+--
+       [PERF] UDP: avg=0.01ms max=0.03ms over 100 requests
+       [90637002] INFO udp_server_stopped
+       
+       [PERF] Loaded 10000 quotes in 7.64s (7641ms)
+       /home/fulgidus/.zvm/master/lib/std/testing.zig:604:14: 0x1048449 in expect (std.zig)
+           if (!ok) return error.TestUnexpectedResult;
+                    ^
+       /home/fulgidus/Documents/quotez/tests/integration/perf_test.zig:181:5: 0x11a382f in test.PERF: 10k quotes load in < 5s (perf_test.zig)
+           try std.testing.expect(elapsed_s < 5.0);
+           ^
+failed command: ./.zig-cache/o/929576e8af01d168a1c5af66a4b9bcc5/test --cache-dir=./.zig-cache --seed=0x23cbf7f1 --listen=-
+
+Build Summary: 6/9 steps succeeded (2 failed); 18/19 tests passed (1 failed)
+test-all transitive failure
++- run test 4 pass (4 total); 42 leaks
++- run test 3 pass, 1 fail (4 total)
+
+error: the following build command failed with exit code 1:

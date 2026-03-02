@@ -1,0 +1,30 @@
+=== SCENARIO 1: BASIC FUNCTIONALITY ===
+
+Build Status:
+- Binary: zig-out/bin/quotez (13MB)
+- Build: Clean (rm -rf zig-out && zig build)
+
+Server Startup:
+[87187687] INFO startup service=quotez version=0.1.0
+[87187692] INFO config_loaded file=quotez.toml tcp_port=1717 udp_port=1717 host=0.0.0.0 directories=1 mode=random interval=60
+[87187699] INFO quote_store_built files=5 quotes=21 duplicates_removed=2 unique=19
+[87187699] INFO initialization_complete quotes=19 mode=random tcp_port=1717 udp_port=1717 polling_interval=60
+[87187699] INFO tcp_server_started host=0.0.0.0 port=1717
+[87187699] INFO udp_server_started host=0.0.0.0 port=1717
+[87187699] INFO service_ready tcp_port=1717 udp_port=1717 quotes_loaded=19
+[87187699] INFO event_loop_started tcp_fd=3 udp_fd=4
+
+TCP Test:
+$ echo "" | nc -q1 localhost 1717
+Innovation distinguishes between a leader and a follower. - Steve Jobs
+
+UDP Test:
+$ echo "TEST" | socat - UDP:localhost:1717,connect-timeout=2
+In three words I can sum up everything I've learned about life: it goes on.
+
+Results:
+✓ Server starts without errors
+✓ TCP returns quote on connection
+✓ UDP returns quote on datagram
+✓ Logs show startup and serve events
+✓ 19 quotes loaded from 5 files

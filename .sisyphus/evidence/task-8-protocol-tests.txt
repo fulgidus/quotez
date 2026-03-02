@@ -1,0 +1,47 @@
+TASK 8: Fix tests/integration/protocol_test.zig - Complete ✓
+========================================================
+
+CHANGES APPLIED:
+1. Fixed 6 port assertions (lines 42, 85, 158-159, 187-188):
+   - OLD: server.address.getPort()
+   - NEW: std.mem.bigToNative(u16, server.address.port)
+   
+2. Fixed 4 selector calls (lines 202, 206, 210, 214):
+   - OLD: const idx = try sel.next();
+   - NEW: const idx = sel.next();  [removed 'try' since returns ?usize, not !usize]
+   
+3. Updated assertion types for optional return (lines 203, 207, 211, 215):
+   - OLD: expectEqual(@as(usize, N), idxN)
+   - NEW: expectEqual(@as(?usize, N), idxN)
+
+4. Verified store.add() calls (lines 18-20, 119, 225, 242, 261):
+   - All calls compile (T2 already implemented the method)
+   - Signature: pub fn add(self: *QuoteStore, content: []const u8) !void
+
+TEST RESULTS:
+✓ All 11 protocol tests PASSED
+✓ Test 1: TCP server RFC 865 compliance - single quote per connection
+✓ Test 2: TCP server handles empty quote store
+✓ Test 3: UDP server RFC 865 compliance - datagram response
+✓ Test 4: UDP server handles empty quote store
+✓ Test 5: UDP server respects 512 byte datagram limit
+✓ Test 6: TCP and UDP servers can coexist on different ports
+✓ Test 7: TCP and UDP servers can share the same port
+✓ Test 8: Selection modes work across TCP and UDP
+✓ Test 9: Quote store deduplication works
+✓ Test 10: Quote store handles UTF-8 quotes
+✓ Test 11: Quote store handles whitespace normalization
+
+VERIFICATION:
+Command: cd /home/fulgidus/Documents/quotez && ./.zig-cache/o/5b80f06ce8eb925259cd0b5253a80afb/test
+Output: All 11 tests passed.
+
+TECHNICAL NOTES:
+- selector.next() returns ?usize (optional), NOT an error union
+- port extraction requires std.mem.bigToNative(u16, server.address.port)
+- server.address is std.posix.sockaddr.in (NetworkToHost conversion needed)
+- test assertions must match return types: @as(?usize, N) for optionals
+
+ARTIFACTS:
+- Modified: tests/integration/protocol_test.zig (8 edits across port/selector fixes)
+- Status: READY FOR MERGE

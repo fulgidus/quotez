@@ -1,0 +1,38 @@
+=== SCENARIO 2: MULTIPLE QUOTES ===
+
+Quote Files:
+- tests/fixtures/quotes/sample.txt (5 quotes)
+- tests/fixtures/quotes/sample.csv (4 quotes) 
+- tests/fixtures/quotes/sample.json (4 quotes)
+- tests/fixtures/quotes/sample.toml (4 quotes)
+- tests/fixtures/quotes/sample.yaml (4 quotes)
+
+Server Load Stats:
+files=5 quotes=21 duplicates_removed=2 unique=19
+
+10 Sequential Requests (Random Mode):
+1. The mind is everything. What you think you become.
+2. Life is 10% what happens to us and 90% how we react to it. - Charles R. Swindoll
+3. Be yourself; everyone else is already taken.
+4. The best time to plant a tree was 20 years ago. The second best time is now. - Chinese Proverb
+5. Innovation distinguishes between a leader and a follower.
+6. In three words I can sum up everything I've learned about life: it goes on.
+7. The mind is everything. What you think you become.
+8. The best time to plant a tree was 20 years ago. The second best time is now.
+9. The only limit to our realization of tomorrow is our doubts of today.
+10. Innovation distinguishes between a leader and a follower.
+
+Parser Verification:
+✓ TXT parser: Loaded 5 quotes
+✓ CSV parser: Loaded 4 quotes (with author field)
+✓ JSON parser: Loaded 4 quotes (nested objects)
+✓ TOML parser: Loaded 4 quotes (table arrays)
+✓ YAML parser: Loaded 4 quotes (sequence)
+
+Deduplication:
+✓ 21 raw quotes → 19 unique (2 duplicates removed via Blake3 hashing)
+
+Quote Variety:
+✓ Different quotes returned in random mode
+✓ Some repetition expected (random mode allows it)
+✓ Quotes from multiple parsers visible in output

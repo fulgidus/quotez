@@ -1,0 +1,9 @@
+1/8 selector.test.sequential mode basic operation...OK
+2/8 selector.test.sequential mode with single quote...OK
+3/8 selector.test.random mode returns valid indices...OK
+4/8 selector.test.random-no-repeat exhaustion and reset...OK
+5/8 selector.test.shuffle-cycle full cycle uniqueness...OK
+6/8 selector.test.shuffle-cycle reshuffle on exhaustion...OK
+7/8 selector.test.selector reset...OK
+8/8 selector.test.empty quote store handling...OK
+All 8 tests passed.

@@ -1,0 +1,13 @@
+README.md:19:- Zig 0.16.0 or later
+specs/001-qotd-nanoservice/plan.md:14:**Language/Version**: Zig 0.16.0 (MANDATORY)
+specs/001-qotd-nanoservice/quickstart.md:23:- Zig 0.16.0 compiler
+specs/001-qotd-nanoservice/quickstart.md:595:### Install Zig 0.16.0
+specs/001-qotd-nanoservice/quickstart.md:599:wget https://ziglang.org/download/0.16.0/zig-linux-x86_64-0.16.0.tar.xz
+specs/001-qotd-nanoservice/quickstart.md:600:tar xf zig-linux-x86_64-0.16.0.tar.xz
+specs/001-qotd-nanoservice/quickstart.md:601:export PATH=$PWD/zig-linux-x86_64-0.16.0:$PATH
+specs/001-qotd-nanoservice/quickstart.md:727:- [Zig Documentation](https://ziglang.org/documentation/0.16.0/)
+specs/001-qotd-nanoservice/research.md:13:### Decision: Zig 0.16.0 (MANDATORY)
+specs/001-qotd-nanoservice/research.md:16:- Zig 0.16.0 is the current development release (as of Mar 2026)
+specs/001-qotd-nanoservice/research.md:61:- async/await (Zig's experimental feature): Not stable in 0.16.0
+specs/001-qotd-nanoservice/research.md:420:| Zig 0.16 API changes | Low | Medium | Pin to exact version, test thoroughly |
+specs/001-qotd-nanoservice/research.md:429:- ✅ Language/Version: Zig 0.16.0 confirmed

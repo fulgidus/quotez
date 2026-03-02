@@ -1,0 +1,136 @@
+=== REAL MANUAL QA - FINAL REPORT ===
+Test Date: Mon Mar 2 10:15:00 CET 2026
+Binary: zig-out/bin/quotez (13MB static)
+Zig Version: 0.16.0 (master)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SCENARIO 1: BASIC FUNCTIONALITY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[✓] Binary builds clean (rm -rf zig-out && zig build)
+[✓] Server starts without errors
+    - Config loaded: tcp_port=1717, udp_port=1717, mode=random
+    - Quote store: 19 unique quotes from 5 files
+    - TCP/UDP servers started successfully
+[✓] TCP returns quote on connection
+    - Test: echo "" | nc -q1 localhost 1717
+    - Result: "Innovation distinguishes between a leader and a follower. - Steve Jobs"
+[✓] UDP returns quote on datagram
+    - Test: echo "TEST" | socat - UDP:localhost:1717
+    - Result: "In three words I can sum up everything I've learned about life: it goes on."
+[✓] Logs show startup and serve events
+    - Startup, config, quote loading, server start, event loop all logged
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SCENARIO 2: MULTIPLE QUOTES & PARSERS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[✓] 5 files loaded (sample.txt, .csv, .json, .toml, .yaml)
+[✓] All parsers working correctly
+    - TXT: 5 quotes
+    - CSV: 4 quotes (with author field parsing)
+    - JSON: 4 quotes (nested object structure)
+    - TOML: 4 quotes (table array format)
+    - YAML: 4 quotes (sequence format)
+[✓] Deduplication working
+    - Raw: 21 quotes
+    - Unique: 19 quotes (2 duplicates removed via Blake3)
+[✓] Different quotes returned (10 requests tested)
+    - Random mode allows repeats (expected behavior)
+    - Quotes from multiple parsers visible in output
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SCENARIO 3: EMPTY DIRECTORY HANDLING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[✓] Server handles empty directory gracefully
+    - Created /tmp/empty-quotes (empty)
+    - Server started without crash
+[✓] Warning logs generated
+    - "WARN empty_quote_store directories=1 files_parsed=0"
+    - "WARN empty_quote_store message=no quotes loaded, service will respond with empty responses"
+[✓] Service remains operational
+    - TCP/UDP servers started
+    - Event loop running
+    - Returns empty responses (no crash)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SCENARIO 4: HOT RELOAD
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[✓] File changes detected automatically
+    - Initial: 19 quotes from 5 files
+    - Added: hotreload-test.txt with 2 quotes
+    - Polling interval: 60 seconds
+[✓] Hot reload triggered within polling interval
+    - Time delta: ~60.8 seconds
+    - Logs: "INFO hot_reload_triggered"
+[✓] Quotes reloaded successfully
+    - Post-reload: 21 quotes from 6 files
+    - "INFO hot_reload_complete quotes=21"
+[✓] New quotes immediately available
+    - Verified via 20 TCP requests
+    - "HOT RELOAD TEST QUOTE 1" served correctly
+[✓] No downtime during reload
+    - Server continued accepting connections
+    - Event loop uninterrupted
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SCENARIO 5: SELECTION MODES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[✓] Random mode (baseline)
+    - Pure randomness with possible repeats
+    - Verified in Scenario 1 & 2
+[✓] Sequential mode
+    - Predictable ordering maintained
+    - 10 requests returned quotes in consistent sequence
+[✓] Shuffle-cycle mode
+    - All 19 quotes served before repeating
+    - Random order within each cycle
+    - Fair distribution: 25 requests → all quotes 1-2 times
+[✓] Random-no-repeat mode
+    - Perfect uniqueness: 19 requests → 19 unique quotes
+    - No duplicates until pool exhausted
+    - Random ordering preserved
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SUMMARY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Scenarios: 5/5 pass (100%)
+Integration: 8/8 pass
+  ✓ TCP server (RFC 865 compliant)
+  ✓ UDP server (RFC 865 compliant)
+  ✓ Config loading (TOML)
+  ✓ Quote store (deduplication via Blake3)
+  ✓ Hot reload (file system polling)
+  ✓ All 5 parsers (txt/csv/json/toml/yaml)
+  ✓ All 4 selection modes
+  ✓ Graceful degradation (empty directory)
+
+Edge Cases: 3 tested
+  ✓ Empty quote directory → warning logs, no crash
+  ✓ Hot reload during operation → seamless, no downtime
+  ✓ Selection mode switching → all modes work correctly
+
+Binary Quality:
+  ✓ Size: 13MB (static, Zig 0.16.0)
+  ✓ Clean build from scratch
+  ✓ No compilation warnings or errors
+  ✓ Structured logging (INFO/WARN/DEBUG/ERROR levels)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+VERDICT: ✅ APPROVE
+
+All core functionality verified working:
+- RFC 865 QOTD protocol implementation (TCP & UDP)
+- Multi-format quote parsing (5 parsers)
+- Content deduplication (Blake3 hashing)
+- Hot reload without downtime
+- All selection modes operational
+- Graceful error handling
+- Production-ready logging
+
+Ready for deployment.

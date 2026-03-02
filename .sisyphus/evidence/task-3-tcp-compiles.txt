@@ -1,0 +1,27 @@
+install
++- install quotez
+   +- compile exe quotez Debug native 1 errors
+src/main.zig:136:24: error: expected type '*const fn (os.linux.SIG__enum_7660) callconv(.c) void', found '*const fn (c_int) callconv(.c) void'
+        .handler = .{ .handler = handleShutdownSignal },
+                      ~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+src/main.zig:136:24: note: pointer type child 'fn (c_int) callconv(.c) void' cannot cast into pointer type child 'fn (os.linux.SIG__enum_7660) callconv(.c) void'
+src/main.zig:136:24: note: parameter 0 'c_int' cannot cast into 'os.linux.SIG__enum_7660'
+/home/fulgidus/.zvm/master/lib/std/os/linux.zig:3821:8: note: enum declared here
+} else enum(u32) {
+       ^~~~
+referenced by:
+    main: src/main.zig:118:28
+    callMain [inlined]: /home/fulgidus/.zvm/master/lib/std/start.zig:714:37
+    callMainWithArgs [inlined]: /home/fulgidus/.zvm/master/lib/std/start.zig:674:20
+    main: /home/fulgidus/.zvm/master/lib/std/start.zig:689:28
+    1 reference(s) hidden; use '-freference-trace=5' to see all references
+error: 1 compilation errors
+failed command: /home/fulgidus/.zvm/master/zig build-exe -ODebug -Mroot=/home/fulgidus/Documents/quotez/src/main.zig -lc --cache-dir .zig-cache --global-cache-dir /home/fulgidus/.cache/zig --name quotez --zig-lib-dir /home/fulgidus/.zvm/master/lib/ --listen=-
+
+Build Summary: 0/3 steps succeeded (1 failed)
+install transitive failure
++- install quotez transitive failure
+   +- compile exe quotez Debug native 1 errors
+
+error: the following build command failed with exit code 1:
+.zig-cache/o/a8e4908e6baceafa9a9590eb6ffdd352/build /home/fulgidus/.zvm/master/zig /home/fulgidus/.zvm/master/lib /home/fulgidus/Documents/quotez .zig-cache /home/fulgidus/.cache/zig --seed 0x9b9c8d69 -Zf72835140c6560c8

@@ -1,0 +1,78 @@
+=============================================================================
+TASK 13: Verify Selector Tests Pass (Post-Migration)
+=============================================================================
+Date: 2025-03-02
+Plan: .sisyphus/plans/finish-quotez.md (lines 1153-1215)
+
+SELECTOR TEST INVENTORY
+=============================================================================
+File: src/selector.zig
+Lines: 248-372 (embedded unit tests)
+
+8 TESTS VERIFIED:
+─────────────────────────────────────────────────────────────────────────
+1. Line 248: "sequential mode basic operation"
+   ✅ PRESENT - Verifies 0,1,2,0,1,2... wraparound behavior
+
+2. Line 261: "sequential mode with single quote"
+   ✅ PRESENT - Verifies single-element selector always returns 0
+
+3. Line 271: "random mode returns valid indices"
+   ✅ PRESENT - Verifies 100 random selections stay within bounds
+
+4. Line 284: "random-no-repeat exhaustion and reset"
+   ✅ PRESENT - Verifies 3-element exhaustion and cycle reset
+
+5. Line 310: "shuffle-cycle full cycle uniqueness"
+   ✅ PRESENT - Verifies full 5-element cycle contains no duplicates
+
+6. Line 328: "shuffle-cycle reshuffle on exhaustion"
+   ✅ PRESENT - Verifies reshuffling after exhaustion
+
+7. Line 350: "selector reset"
+   ✅ PRESENT - Verifies reset() restarts from position 0
+
+8. Line 366: "empty quote store handling"
+   ✅ PRESENT - Verifies selector.next() returns null for 0-element store
+
+TEST EXECUTION RESULTS
+=============================================================================
+Command: export PATH="$HOME/.zvm/master:$PATH" && zig build test
+Build Output: (silent - Zig test runner only prints failures)
+Exit Code: 0 (SUCCESS)
+Status: ✅ ALL 8 SELECTOR TESTS PASSED
+
+BUILD VERIFICATION
+=============================================================================
+✅ Pre-test build: zig build (SUCCESS)
+✅ Test compilation: No errors
+✅ Test execution: All 8 tests passed
+✅ Memory allocator: std.testing.allocator (Zig test harness)
+✅ No memory leaks detected
+
+KEY OBSERVATIONS
+=============================================================================
+• All 8 tests compile and execute without errors
+• Test suite uses std.testing.allocator for memory safety
+• Tests cover all 4 selection modes (sequential, random, random_no_repeat, shuffle_cycle)
+• Tests verify edge cases (single element, empty store, wraparound, exhaustion)
+• Zig 0.16.0 test runner silent on success (expected behavior)
+
+INHERITED FIXES VERIFIED
+=============================================================================
+✅ T1 Fix Applied: initWithSeed() now uses std.time.Instant.now()
+✅ T1 Fix Applied: errdefer deallocation in init() working correctly
+✅ selector.next() returns ?usize (optional, not error union)
+✅ Seed generation uses correct Zig 0.16 time API (.timestamp.sec/.timestamp.nsec)
+
+CONCLUSION
+=============================================================================
+✅ TASK COMPLETE
+   - All 8 selector tests verified present in source
+   - All tests pass with exit code 0
+   - No compilation errors
+   - No runtime failures
+   - Memory safety confirmed via test allocator
+
+Task Status: COMPLETE
+Evidence: .sisyphus/evidence/task-13-selector-tests.txt
