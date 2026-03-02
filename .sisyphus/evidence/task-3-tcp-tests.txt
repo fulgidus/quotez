@@ -1,5 +1,0 @@
-Build Summary: 3/3 steps succeeded
-test success
-+- run test success 10ms MaxRSS:6M
-   +- compile test Debug native success 699ms MaxRSS:133M
-
