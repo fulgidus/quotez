@@ -7,7 +7,7 @@ pub const FileWatcher = struct {
     directories: [][]const u8, // Owned copies of directory paths
     interval_seconds: u64,
     last_check: std.time.Instant,
-    dir_mtimes: std.ArrayList(i96), // mtime (nanoseconds) for each directory
+    dir_mtimes: std.ArrayList(i128), // mtime (nanoseconds) for each directory
 
     /// Initialize FileWatcher with directories to watch and polling interval
     pub fn init(allocator: std.mem.Allocator, directories: []const []const u8, interval_seconds: u64) !FileWatcher {
@@ -25,7 +25,7 @@ pub const FileWatcher = struct {
         }
 
         // Initialize mtime tracking for each directory
-        var dir_mtimes = try std.ArrayList(i96).initCapacity(allocator, directories.len);
+        var dir_mtimes = try std.ArrayList(i128).initCapacity(allocator, directories.len);
         errdefer dir_mtimes.deinit(allocator);
 
         try dir_mtimes.ensureTotalCapacity(allocator, directories.len);
@@ -85,9 +85,9 @@ pub const FileWatcher = struct {
     }
 
     /// Helper function to get directory modification time in nanoseconds
-    fn getDirectoryMtime(dir_path: []const u8) !i96 {
+    fn getDirectoryMtime(dir_path: []const u8) !i128 {
         const stat = try std.fs.cwd().statFile(dir_path);
-        return stat.mtime.nanoseconds;
+        return stat.mtime;
     }
 };
 
