@@ -1,0 +1,10 @@
+global:
+  image:
+    registry: docker.io
+    pullPolicy: IfNotPresent
+
+qotd-service:
+  enabled: true
+
+qotd-web:
+  enabled: false

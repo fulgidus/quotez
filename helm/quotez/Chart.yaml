@@ -1,0 +1,17 @@
+apiVersion: v2
+name: quotez
+description: Helm umbrella chart for quotez (QOTD RFC 865 service + optional website)
+type: application
+version: 0.1.0
+appVersion: "1.0"
+
+dependencies:
+  - name: qotd-service
+    version: "0.1.0"
+    repository: ""
+    condition: qotd-service.enabled
+
+  - name: qotd-web
+    version: "0.1.0"
+    repository: ""
+    condition: qotd-web.enabled

@@ -1,0 +1,21 @@
+enabled: true
+
+replicaCount: 1
+
+image:
+  repository: quotez
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  tcpPort: 17
+  udpPort: 17
+
+resources: {}
+  # requests:
+  #   cpu: 100m
+  #   memory: 128Mi
+  # limits:
+  #   cpu: 500m
+  #   memory: 512Mi
