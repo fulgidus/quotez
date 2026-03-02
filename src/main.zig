@@ -17,8 +17,31 @@ pub fn main() !void {
     // Log startup
     log.info("startup", .{ .service = "quotez", .version = "0.1.0" });
 
-    // Load configuration from quotez.toml
-    const config_path = "quotez.toml";
+    // Parse CLI arguments for config file path
+    var args = try std.process.argsAlloc(allocator);
+    defer std.process.argsFree(allocator, args);
+
+    var config_path: []const u8 = "quotez.toml";
+    var show_help = false;
+
+    // Process arguments (skip args[0] which is the binary name)
+    if (args.len > 1) {
+        const first_arg = args[1];
+        if (std.mem.eql(u8, first_arg, "--help") or std.mem.eql(u8, first_arg, "-h")) {
+            show_help = true;
+        } else {
+            config_path = first_arg;
+        }
+    }
+
+    // Handle help flag
+    if (show_help) {
+        const stdout = std.io.getStdOut().writer();
+        try stdout.print("Usage: quotez [CONFIG_PATH]\n", .{});
+        std.process.exit(0);
+    }
+
+    // Load configuration
     var cfg = config.Configuration.load(allocator, config_path) catch |err| {
         log.err("fatal", .{
             .reason = "failed to load configuration",
