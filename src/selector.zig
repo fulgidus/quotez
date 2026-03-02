@@ -44,9 +44,18 @@ pub const Selector = struct {
 
     /// Initialize selector with given mode
     pub fn init(allocator: std.mem.Allocator, mode: SelectionMode, quote_count: usize) !Selector {
-        // Seed RNG with timestamp
-        const seed = @as(u64, @intCast(std.time.timestamp()));
+        // Seed RNG with timestamp in Zig 0.16
+        const instant = std.time.Instant.now() catch {
+            const seed: u64 = 12345; // fallback seed
+            return initWithSeed(allocator, mode, quote_count, seed);
+        };
+        const seed = @as(u64, @intCast(instant.timestamp.sec * 1000 + @divTrunc(instant.timestamp.nsec, 1_000_000)));
 
+        return initWithSeed(allocator, mode, quote_count, seed);
+    }
+
+    /// Initialize selector with a specific seed
+    pub fn initWithSeed(allocator: std.mem.Allocator, mode: SelectionMode, quote_count: usize, seed: u64) !Selector {
         const state = switch (mode) {
             .random => SelectorState{
                 .random = RandomState{
@@ -64,7 +73,6 @@ pub const Selector = struct {
             },
             .shuffle_cycle => blk: {
                 var order = try allocator.alloc(usize, quote_count);
-                errdefer allocator.free(order);
 
                 // Initialize order array [0, 1, 2, ..., n-1]
                 for (order, 0..) |*item, i| {
