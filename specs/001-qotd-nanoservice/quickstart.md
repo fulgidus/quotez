@@ -20,7 +20,7 @@ This guide provides step-by-step instructions for deploying and using quotez, th
 
 ### Local Development
 
-- Zig 0.13.0 compiler
+- Zig 0.16.0 compiler
 - Linux operating system (musl or glibc)
 - Build tools: `git`, `make` (optional)
 
@@ -592,13 +592,13 @@ docker logs quotez | grep ERROR
 
 ## Building from Source
 
-### Install Zig 0.13.0
+### Install Zig 0.16.0
 
 ```bash
 # Download from https://ziglang.org/download/
-wget https://ziglang.org/download/0.13.0/zig-linux-x86_64-0.13.0.tar.xz
-tar xf zig-linux-x86_64-0.13.0.tar.xz
-export PATH=$PWD/zig-linux-x86_64-0.13.0:$PATH
+wget https://ziglang.org/download/0.16.0/zig-linux-x86_64-0.16.0.tar.xz
+tar xf zig-linux-x86_64-0.16.0.tar.xz
+export PATH=$PWD/zig-linux-x86_64-0.16.0:$PATH
 ```
 
 ### Clone Repository
@@ -724,7 +724,7 @@ A: Not in MVP. Post-MVP feature.
 
 - [RFC 865 - Quote of the Day Protocol](https://www.rfc-editor.org/rfc/rfc865.html)
 - [quotez GitHub Repository](https://github.com/yourorg/quotez)
-- [Zig Documentation](https://ziglang.org/documentation/0.13.0/)
+- [Zig Documentation](https://ziglang.org/documentation/0.16.0/)
 - Contract Documents:
   - `contracts/qotd-protocol.md` - Protocol specification
   - `contracts/config-schema.md` - Configuration reference

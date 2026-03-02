@@ -10,10 +10,10 @@ This document captures research findings and technical decisions for implementin
 
 ## Zig Language & Toolchain
 
-### Decision: Zig 0.13.0 (Latest Stable)
+### Decision: Zig 0.16.0 (MANDATORY)
 
 **Rationale**:
-- Zig 0.13.0 is the current stable release (as of Dec 2025)
+- Zig 0.16.0 is the current development release (as of Mar 2026)
 - Provides stable standard library APIs for networking, file I/O, and crypto
 - Strong support for static linking with musl libc
 - Cross-compilation to Linux x86_64/aarch64 out of the box
@@ -58,7 +58,7 @@ const optimize = b.standardOptimizeOption(.{
 
 **Alternatives Considered**:
 - Multi-threaded with thread pool: Overkill for expected load, adds complexity
-- async/await (Zig's experimental feature): Not stable in 0.13.0
+- async/await (Zig's experimental feature): Not stable in 0.16.0
 - External event loop (libuv): Violates zero-dependency requirement
 
 ## File Format Parsing
@@ -417,7 +417,7 @@ ENTRYPOINT ["/quotez"]
 
 | Risk | Likelihood | Impact | Mitigation |
 |------|------------|--------|------------|
-| Zig 0.13 API changes | Low | Medium | Pin to exact version, test thoroughly |
+| Zig 0.16 API changes | Low | Medium | Pin to exact version, test thoroughly |
 | TOML parsing complexity | Medium | Low | Use zig-toml package or inline simple parser |
 | Event loop performance | Low | Medium | Profile with realistic load, add threading if needed |
 | Static linking issues | Low | High | Test on target Linux distros early |
@@ -426,7 +426,7 @@ ENTRYPOINT ["/quotez"]
 ## Open Questions (Resolved)
 
 All NEEDS CLARIFICATION items from Technical Context have been resolved:
-- ✅ Language/Version: Zig 0.13.0 confirmed
+- ✅ Language/Version: Zig 0.16.0 confirmed
 - ✅ Dependencies: Zig stdlib only (zero external deps)
 - ✅ Testing: Built-in Zig test framework
 - ✅ Target Platform: Linux x86_64/aarch64 with musl libc
