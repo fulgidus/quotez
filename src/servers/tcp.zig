@@ -3,10 +3,28 @@ const logger = @import("../logger.zig");
 const quote_store = @import("../quote_store.zig");
 const selector_mod = @import("../selector.zig");
 
+/// Parse an IPv4 string like "127.0.0.1" or "0.0.0.0" into a big-endian u32
+fn parseIp4(host: []const u8) !u32 {
+    if (std.mem.eql(u8, host, "0.0.0.0")) return 0;
+    if (std.mem.eql(u8, host, "127.0.0.1")) return std.mem.nativeToBig(u32, 0x7F000001);
+
+    var parts = std.mem.splitScalar(u8, host, '.');
+    var result: u32 = 0;
+    var count: usize = 0;
+    while (parts.next()) |part| {
+        if (count >= 4) return error.InvalidIp;
+        const val = try std.fmt.parseInt(u8, part, 10);
+        result = (result << 8) | val;
+        count += 1;
+    }
+    if (count != 4) return error.InvalidIp;
+    return std.mem.nativeToBig(u32, result);
+}
+
 /// TCP QOTD server implementing RFC 865
 pub const TcpServer = struct {
-    socket: std.net.Server,
-    address: std.net.Address,
+    socket: std.posix.socket_t,
+    address: std.posix.sockaddr.in,
     store: *quote_store.QuoteStore,
     selector: *selector_mod.Selector,
     log: logger.Logger,
@@ -22,8 +40,8 @@ pub const TcpServer = struct {
     ) !TcpServer {
         var log = logger.Logger.init();
 
-        // Parse address
-        const address = std.net.Address.parseIp(host, port) catch |err| {
+        // Parse host string into IPv4 bytes
+        const parsed_bytes = parseIp4(host) catch |err| {
             log.err("tcp_bind_failed", .{
                 .reason = "invalid address",
                 .host = host,
@@ -33,12 +51,38 @@ pub const TcpServer = struct {
             return err;
         };
 
-        // Create and bind socket
-        const socket = try address.listen(.{
-            .reuse_address = true,
-            .reuse_port = true,
-            .kernel_backlog = 128,
-        });
+        const addr = std.posix.sockaddr.in{
+            .family = std.posix.AF.INET,
+            .port = std.mem.nativeToBig(u16, port),
+            .addr = parsed_bytes,
+        };
+
+        // Create socket
+        const socket = try std.posix.socket(
+            std.posix.AF.INET,
+            std.posix.SOCK.STREAM,
+            std.posix.IPPROTO.TCP,
+        );
+        errdefer std.posix.close(socket);
+
+        // Set socket options
+        try std.posix.setsockopt(
+            socket,
+            std.posix.SOL.SOCKET,
+            std.posix.SO.REUSEADDR,
+            &std.mem.toBytes(@as(c_int, 1)),
+        );
+
+        // Bind socket
+        try std.posix.bind(socket, @ptrCast(&addr), @sizeOf(std.posix.sockaddr.in));
+
+        // Listen
+        try std.posix.listen(socket, 128);
+
+        // Set non-blocking mode for event loop
+        const flags = try std.posix.fcntl(socket, std.posix.F.GETFL, 0);
+        const nonblock_flag = @as(usize, @as(u32, @bitCast(std.posix.O{ .NONBLOCK = true })));
+        _ = try std.posix.fcntl(socket, std.posix.F.SETFL, flags | nonblock_flag);
 
         log.info("tcp_server_started", .{
             .host = host,
@@ -47,7 +91,7 @@ pub const TcpServer = struct {
 
         return TcpServer{
             .socket = socket,
-            .address = address,
+            .address = addr,
             .store = store,
             .selector = sel,
             .log = log,
@@ -57,14 +101,22 @@ pub const TcpServer = struct {
 
     /// Stop the TCP server
     pub fn deinit(self: *TcpServer) void {
-        self.socket.deinit();
+        std.posix.close(self.socket);
         self.log.info("tcp_server_stopped", .{});
     }
 
     /// Accept and serve a single connection (non-blocking)
     pub fn acceptAndServe(self: *TcpServer) !void {
-        // Accept connection (blocking for now, will be non-blocking in event loop)
-        var conn = self.socket.accept() catch |err| {
+        var client_addr: std.posix.sockaddr.storage = undefined;
+        var client_addr_len: std.posix.socklen_t = @sizeOf(std.posix.sockaddr.storage);
+        
+        // Accept connection
+        const client_fd = std.posix.accept(
+            self.socket,
+            @ptrCast(&client_addr),
+            &client_addr_len,
+            0,
+        ) catch |err| {
             // Non-fatal errors that we can recover from
             switch (err) {
                 error.WouldBlock => return, // No connection available
@@ -75,16 +127,8 @@ pub const TcpServer = struct {
                 else => return err,
             }
         };
-        defer conn.stream.close();
+        defer std.posix.close(client_fd);
 
-        // Serve the connection
-        self.serveConnection(conn.stream) catch |err| {
-            self.log.warn("tcp_serve_error", .{ .err = @errorName(err) });
-        };
-    }
-
-    /// Serve a single connection: send quote and close
-    fn serveConnection(self: *TcpServer, stream: std.net.Stream) !void {
         // Check if quote store is empty
         if (self.store.isEmpty()) {
             // Close immediately without sending (per contract)
@@ -100,8 +144,8 @@ pub const TcpServer = struct {
             return;
         };
 
-        // Send quote + newline
-        stream.writeAll(quote) catch |err| {
+        // Send quote
+        _ = std.posix.send(client_fd, quote, 0) catch |err| {
             // Handle send errors
             switch (err) {
                 error.BrokenPipe, error.ConnectionResetByPeer => {
@@ -109,18 +153,25 @@ pub const TcpServer = struct {
                     self.log.debug("tcp_client_disconnected", .{});
                     return;
                 },
-                else => return err,
+                else => {
+                    self.log.warn("tcp_serve_error", .{ .err = @errorName(err) });
+                    return;
+                },
             }
         };
 
-        stream.writeAll("\n") catch |err| {
+        // Send newline
+        _ = std.posix.send(client_fd, "\n", 0) catch |err| {
             switch (err) {
                 error.BrokenPipe, error.ConnectionResetByPeer => return,
-                else => return err,
+                else => {
+                    self.log.warn("tcp_serve_error", .{ .err = @errorName(err) });
+                    return;
+                },
             }
         };
 
-        // Connection closes automatically when stream is deferred
+        // Connection closes automatically when client_fd is deferred
         self.log.debug("tcp_request_served", .{ .quote_length = quote.len });
     }
 
@@ -155,7 +206,7 @@ test "tcp server initialization" {
     defer server.deinit();
 
     // Server should be initialized
-    try std.testing.expectEqual(@as(u16, 8017), server.address.getPort());
+    try std.testing.expectEqual(@as(u16, 8017), std.mem.bigToNative(u16, server.address.port));
 }
 
 test "tcp serve connection with empty store" {
