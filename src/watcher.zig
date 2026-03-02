@@ -6,8 +6,8 @@ pub const FileWatcher = struct {
     allocator: std.mem.Allocator,
     directories: [][]const u8, // Owned copies of directory paths
     interval_seconds: u64,
-    last_check: i128, // Nanoseconds since epoch
-    dir_mtimes: std.ArrayList(i128), // mtime (nanoseconds) for each directory
+    last_check: std.time.Instant,
+    dir_mtimes: std.ArrayList(i96), // mtime (nanoseconds) for each directory
 
     /// Initialize FileWatcher with directories to watch and polling interval
     pub fn init(allocator: std.mem.Allocator, directories: []const []const u8, interval_seconds: u64) !FileWatcher {
@@ -25,22 +25,22 @@ pub const FileWatcher = struct {
         }
 
         // Initialize mtime tracking for each directory
-        var dir_mtimes = std.ArrayList(i128).init(allocator);
-        errdefer dir_mtimes.deinit();
+        var dir_mtimes = try std.ArrayList(i96).initCapacity(allocator, directories.len);
+        errdefer dir_mtimes.deinit(allocator);
 
-        try dir_mtimes.ensureTotalCapacity(directories.len);
+        try dir_mtimes.ensureTotalCapacity(allocator, directories.len);
 
         // Get initial mtimes for all directories
         for (owned_dirs) |dir| {
             const mtime = getDirectoryMtime(dir) catch 0; // Use 0 if stat fails initially
-            try dir_mtimes.append(mtime);
+            try dir_mtimes.append(allocator, mtime);
         }
 
         return FileWatcher{
             .allocator = allocator,
             .directories = owned_dirs,
             .interval_seconds = interval_seconds,
-            .last_check = std.time.nanoTimestamp(),
+            .last_check = try std.time.Instant.now(),
             .dir_mtimes = dir_mtimes,
         };
     }
@@ -51,17 +51,18 @@ pub const FileWatcher = struct {
             self.allocator.free(dir);
         }
         self.allocator.free(self.directories);
-        self.dir_mtimes.deinit();
+        self.dir_mtimes.deinit(self.allocator);
     }
 
     /// Check if any watched directory has changed since last check
     /// Returns true if changes detected, false if no changes or interval not elapsed
     pub fn check(self: *FileWatcher) !bool {
-        const now = std.time.nanoTimestamp();
-        const interval_ns = @as(i128, self.interval_seconds) * std.time.ns_per_s;
+        const now = try std.time.Instant.now();
+        const elapsed_ns = now.since(self.last_check);
+        const interval_ns = self.interval_seconds * std.time.ns_per_s;
 
         // Return early if not enough time has passed
-        if ((now - self.last_check) < interval_ns) {
+        if (elapsed_ns < interval_ns) {
             return false;
         }
 
@@ -84,9 +85,9 @@ pub const FileWatcher = struct {
     }
 
     /// Helper function to get directory modification time in nanoseconds
-    fn getDirectoryMtime(dir_path: []const u8) !i128 {
+    fn getDirectoryMtime(dir_path: []const u8) !i96 {
         const stat = try std.fs.cwd().statFile(dir_path);
-        return stat.mtime;
+        return stat.mtime.nanoseconds;
     }
 };
 

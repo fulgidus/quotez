@@ -5,6 +5,7 @@ const quote_store = @import("quote_store.zig");
 const selector = @import("selector.zig");
 const tcp_server = @import("servers/tcp.zig");
 const udp_server = @import("servers/udp.zig");
+const watcher = @import("watcher.zig");
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -103,14 +104,20 @@ pub fn main() !void {
         .quotes_loaded = store.count(),
     });
 
-    // TODO: Phase 8 - Start file watcher for hot reload
+    // Initialize FileWatcher for hot reload
+    var file_watcher = try watcher.FileWatcher.init(
+        allocator,
+        cfg.directories,
+        @as(u64, cfg.polling_interval),  // Cast u32 to u64
+    );
+    defer file_watcher.deinit();
 
     // Setup signal handling for graceful shutdown
     var shutdown_requested = std.atomic.Value(bool).init(false);
     try setupSignalHandlers(&shutdown_requested);
 
     // Run event loop with poll() for both TCP and UDP
-    runEventLoop(&tcp, &udp, &log, &shutdown_requested) catch |err| {
+    runEventLoop(&tcp, &udp, &file_watcher, &store, &sel, &cfg, &log, &shutdown_requested) catch |err| {
         log.err("fatal", .{
             .reason = "event loop error",
             .err = @errorName(err),
@@ -157,6 +164,10 @@ fn handleShutdownSignal(_: std.posix.SIG) callconv(.c) void {
 fn runEventLoop(
     tcp: *tcp_server.TcpServer,
     udp: *udp_server.UdpServer,
+    file_watcher: *watcher.FileWatcher,
+    store: *quote_store.QuoteStore,
+    sel: *selector.Selector,
+    cfg: *config.Configuration,
     log: *logger.Logger,
     shutdown_requested: *std.atomic.Value(bool),
 ) !void {
@@ -194,7 +205,16 @@ fn runEventLoop(
             return err;
         };
 
-        if (ready == 0) continue; // Timeout (shouldn't happen with infinite timeout)
+        if (ready == 0) {
+            // Poll timeout - check for file changes
+            if (try file_watcher.check()) {
+                log.info("hot_reload_triggered", .{});
+                try store.build(cfg.directories);
+                try sel.reset(store.count());
+                log.info("hot_reload_complete", .{ .quotes = store.count() });
+            }
+            continue;
+        }
 
         // Check TCP socket
         if (poll_fds[0].revents & std.posix.POLL.IN != 0) {
@@ -233,3 +253,4 @@ pub const quote_store_mod = quote_store;
 pub const selector_mod = selector;
 pub const tcp_server_mod = tcp_server;
 pub const udp_server_mod = udp_server;
+pub const watcher_mod = watcher;
