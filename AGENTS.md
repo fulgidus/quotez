@@ -29,4 +29,11 @@ Zig 0.16.0: Follow standard conventions
 - 001-qotd-nanoservice: Updated to Zig 0.16.0 (MANDATORY)
 
 <!-- MANUAL ADDITIONS START -->
+## Git Commit Constraints (HARD RULES)
+
+- **Preserve user identity**: NEVER change git config (user.name, user.email). NEVER use --author overrides.
+- **No AI attribution**: NEVER add Co-authored-by trailers, "Ultraworked" footers, or any third-party contributor references to commits.
+- **No agent branding in commits**: NEVER use agent names (Sisyphus, Atlas, etc.) in commit scopes, subjects, or bodies.
+- **Commit messages must be clean**: No references to `.sisyphus/`, evidence files, plan files, or orchestration artifacts in commit messages.
+- **No root directory pollution**: NEVER create scratch files, test binaries, or temporary files in the project root directory.
 <!-- MANUAL ADDITIONS END -->
