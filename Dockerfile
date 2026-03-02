@@ -7,7 +7,7 @@
 #   docker build -t quotez .
 #
 # Run with:
-#   docker run -d -p 8017:8017/tcp -p 8017:8017/udp \
+#   docker run -d -p 17:17/tcp -p 17:17/udp \
 #     -v ./quotes:/data/quotes:ro \
 #     quotez
 
@@ -22,8 +22,8 @@ COPY quotez.docker.toml /quotez.toml
 # Create sample quotes directory (override with volume mount)
 COPY tests/fixtures/quotes/ /data/quotes/
 
-# Default exposed ports (can use 8017 for non-root)
-EXPOSE 8017/tcp 8017/udp
+# RFC 865 standard QOTD port
+EXPOSE 17/tcp 17/udp
 
 # Health check not available in scratch, use external orchestrator health checks
 

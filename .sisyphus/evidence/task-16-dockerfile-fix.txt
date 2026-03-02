@@ -1,0 +1,46 @@
+# Task 16: Dockerfile Port Configuration Fix
+
+## Objective
+Align Dockerfile port configuration with RFC 865 standard (port 17) and quotez.docker.toml
+
+## Changes Made
+
+### Dockerfile Line 10 (Run Command Comment)
+BEFORE: -p 8017:8017/tcp -p 8017:8017/udp
+AFTER:  -p 17:17/tcp -p 17:17/udp
+
+### Dockerfile Line 25 (Comment)
+BEFORE: # Default exposed ports (can use 8017 for non-root)
+AFTER:  # RFC 865 standard QOTD port
+
+### Dockerfile Line 26 (EXPOSE Directive)
+BEFORE: EXPOSE 8017/tcp 8017/udp
+AFTER:  EXPOSE 17/tcp 17/udp
+
+## Verification
+
+### Port Alignment Check
+quotez.toml:        tcp_port = 17, udp_port = 17 ✓
+quotez.docker.toml: tcp_port = 17, udp_port = 17 ✓
+Dockerfile EXPOSE:  17/tcp 17/udp ✓
+Dockerfile comment: -p 17:17/tcp -p 17:17/udp ✓
+
+### Port 8017 Removal
+No references to port 8017 remain in Dockerfile ✓
+
+### RFC 865 Compliance
+All configuration files now reference port 17 (RFC 865 standard) ✓
+
+## Status
+✅ Port configuration aligned across all files
+✅ RFC 865 standard port 17 used consistently
+✅ Ready for Docker build and deployment
+
+## Note
+Docker build and container testing requires Docker daemon (not available in current environment).
+Manual testing required when Docker is available:
+  docker build -t quotez .
+  docker images quotez --format '{{.Size}}'
+  docker run -d --name quotez-test -p 17:17/tcp -p 17:17/udp quotez
+  echo '' | nc -q1 localhost 17
+  docker rm -f quotez-test
