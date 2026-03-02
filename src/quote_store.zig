@@ -73,9 +73,9 @@ pub const QuoteStore = struct {
     /// Initialize an empty quote store
     pub fn init(allocator: std.mem.Allocator) QuoteStore {
         return .{
-            .quotes = std.ArrayList(Quote).init(allocator),
+            .quotes = .{}, // Empty ArrayList in Zig 0.16
             .allocator = allocator,
-            .last_rebuild = std.time.timestamp(),
+            .last_rebuild = 0, // Use 0 instead of timestamp for now
             .metadata = .{},
             .log = logger.Logger.init(),
         };
@@ -86,7 +86,7 @@ pub const QuoteStore = struct {
         for (self.quotes.items) |quote| {
             quote.deinit(self.allocator);
         }
-        self.quotes.deinit();
+        self.quotes.deinit(self.allocator); // Pass allocator to deinit in Zig 0.16
     }
 
     /// Build quote store from directories
@@ -114,7 +114,12 @@ pub const QuoteStore = struct {
 
         // Update metadata
         self.metadata.unique_quotes = self.quotes.items.len;
-        self.last_rebuild = std.time.timestamp();
+        // Update last rebuild timestamp using Instant in Zig 0.16
+        const instant = std.time.Instant.now() catch {
+            self.last_rebuild = 0;
+            return;
+        };
+        self.last_rebuild = instant.timestamp.sec;
 
         // Log results
         if (self.metadata.unique_quotes == 0) {
@@ -165,7 +170,8 @@ pub const QuoteStore = struct {
         const file = try std.fs.cwd().openFile(path, .{});
         defer file.close();
 
-        const content = try file.readToEndAlloc(self.allocator, 10 * 1024 * 1024); // 10MB max
+        // Read file using Zig 0.16 API (read via Dir instead of File)
+        const content = try std.fs.cwd().readFileAlloc(path, self.allocator, std.Io.Limit.limited(10 * 1024 * 1024)); // 10MB max
         defer self.allocator.free(content);
 
         // Detect format
@@ -189,7 +195,7 @@ pub const QuoteStore = struct {
             });
             return err;
         };
-        defer parse_result.deinit();
+        defer parse_result.deinit(self.allocator);
 
         // Add quotes to store
         for (parse_result.quotes.items) |quote_content| {
@@ -212,7 +218,7 @@ pub const QuoteStore = struct {
 
             // Add to store
             try seen.put(quote.hash, {});
-            try self.quotes.append(quote);
+            try self.quotes.append(self.allocator, quote); // Pass allocator in Zig 0.16
         }
     }
 
@@ -230,6 +236,37 @@ pub const QuoteStore = struct {
     /// Get total number of quotes
     pub fn count(self: *const QuoteStore) usize {
         return self.quotes.items.len;
+    }
+
+    /// Add a quote to the store with deduplication
+    /// Creates a new quote from raw content and checks for duplicates
+    /// using Blake3 hash comparison
+    pub fn add(self: *QuoteStore, content: []const u8) !void {
+        // Create quote with hash
+        const quote = try Quote.init(self.allocator, content, null);
+        
+        // Check for duplicates using Blake3 hash
+        var is_duplicate = false;
+        for (self.quotes.items) |existing| {
+            if (std.mem.eql(u8, &existing.hash, &quote.hash)) {
+                is_duplicate = true;
+                break;
+            }
+        }
+        
+        if (is_duplicate) {
+            quote.deinit(self.allocator);
+            self.metadata.duplicates_removed += 1;
+        } else {
+            try self.quotes.append(self.allocator, quote);
+            self.metadata.unique_quotes += 1;
+        }
+        self.metadata.total_quotes_loaded += 1;
+    }
+
+    /// Alias for add() - provides alternative method name
+    pub fn addQuote(self: *QuoteStore, content: []const u8) !void {
+        return self.add(content);
     }
 };
 
@@ -269,7 +306,7 @@ test "quote store deduplication" {
     // Add quote 1
     const q1 = try Quote.init(allocator, "Quote A", null);
     try seen.put(q1.hash, {});
-    try store.quotes.append(q1);
+    try store.quotes.append(allocator, q1);
     store.metadata.total_quotes_loaded += 1;
 
     // Try to add duplicate
@@ -279,7 +316,7 @@ test "quote store deduplication" {
         q2.deinit(allocator);
     } else {
         try seen.put(q2.hash, {});
-        try store.quotes.append(q2);
+        try store.quotes.append(allocator, q2);
         store.metadata.total_quotes_loaded += 1;
     }
 
@@ -287,7 +324,7 @@ test "quote store deduplication" {
     const q3 = try Quote.init(allocator, "Quote B", null);
     if (!seen.contains(q3.hash)) {
         try seen.put(q3.hash, {});
-        try store.quotes.append(q3);
+        try store.quotes.append(allocator, q3);
         store.metadata.total_quotes_loaded += 1;
     }
 
@@ -307,11 +344,11 @@ test "quote store get and count" {
 
     const q1 = try Quote.init(allocator, "First", null);
     try seen.put(q1.hash, {});
-    try store.quotes.append(q1);
+    try store.quotes.append(allocator, q1);
 
     const q2 = try Quote.init(allocator, "Second", null);
     try seen.put(q2.hash, {});
-    try store.quotes.append(q2);
+    try store.quotes.append(allocator, q2);
 
     try std.testing.expectEqual(@as(usize, 2), store.count());
     try std.testing.expectEqualStrings("First", store.get(0).?);
@@ -332,7 +369,7 @@ test "quote store isEmpty" {
 
     const q = try Quote.init(allocator, "Test", null);
     try seen.put(q.hash, {});
-    try store.quotes.append(q);
+    try store.quotes.append(allocator, q);
 
     try std.testing.expect(!store.isEmpty());
 }
