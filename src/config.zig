@@ -33,6 +33,10 @@ pub const Configuration = struct {
     tcp_port: u16,
     udp_port: u16,
 
+    // Health section
+    health_enabled: bool,
+    health_port: u16,
+
     // Quotes section
     directories: [][]const u8,
     selection_mode: SelectionMode,
@@ -46,18 +50,19 @@ pub const Configuration = struct {
     /// Default values per contract
     pub const Defaults = struct {
         pub const host: []const u8 = "0.0.0.0";
-        pub const tcp_port: u16 = 17;
-        pub const udp_port: u16 = 17;
+        pub const tcp_port: u16 = 8017;
+        pub const udp_port: u16 = 8017;
+        pub const health_enabled: bool = true;
+        pub const health_port: u16 = 8080;
         pub const selection_mode: SelectionMode = .random;
         pub const polling_interval: u32 = 60;
     };
-
     /// Load and parse configuration from file
     pub fn load(allocator: std.mem.Allocator, path: []const u8) !Configuration {
         var log = logger.Logger.init();
 
         // Read configuration file using Zig 0.16 API
-        const content = std.fs.cwd().readFileAlloc(path, allocator, std.Io.Limit.limited(1024 * 1024)) catch |err| {
+        const content = std.fs.cwd().readFileAlloc(allocator, path, 1024 * 1024) catch |err| {
             log.err("config_error", .{ .reason = "failed to read file", .path = path });
             return err;
         };
@@ -75,11 +80,12 @@ pub const Configuration = struct {
             .tcp_port = config.tcp_port,
             .udp_port = config.udp_port,
             .host = config.host,
+            .health_enabled = config.health_enabled,
+            .health_port = config.health_port,
             .directories = config.directories.len,
             .mode = config.selection_mode.asString(),
             .interval = config.polling_interval,
         });
-
         return config;
     }
 
@@ -105,9 +111,11 @@ const TomlParser = struct {
     host: ?[]const u8 = null,
     tcp_port: ?u16 = null,
     udp_port: ?u16 = null,
+    health_enabled: ?bool = null,
+    health_port: ?u16 = null,
     directories: ?std.ArrayList([]const u8) = null,
     mode: ?[]const u8 = null,
-    interval: ?u32 = null,
+    polling_interval: ?u32 = null,
 
     pub fn init(allocator: std.mem.Allocator, content: []const u8) TomlParser {
         return .{
@@ -158,7 +166,8 @@ const TomlParser = struct {
             .host = self.host orelse try self.allocator.dupe(u8, Configuration.Defaults.host),
             .tcp_port = self.tcp_port orelse Configuration.Defaults.tcp_port,
             .udp_port = self.udp_port orelse Configuration.Defaults.udp_port,
-            .directories = try self.directories.?.toOwnedSlice(self.allocator),
+            .health_enabled = self.health_enabled orelse Configuration.Defaults.health_enabled,
+            .health_port = self.health_port orelse Configuration.Defaults.health_port,
             .selection_mode = blk: {
                 if (self.mode) |mode_str| {
                     if (SelectionMode.fromString(mode_str)) |mode| {
@@ -175,10 +184,11 @@ const TomlParser = struct {
                     break :blk Configuration.Defaults.selection_mode;
                 }
             },
-            .polling_interval = self.interval orelse blk: {
+            .polling_interval = self.polling_interval orelse blk: {
                 self.log.info("default_applied", .{ .field = "polling.interval_seconds", .value = 60 });
                 break :blk Configuration.Defaults.polling_interval;
             },
+            .directories = if (self.directories) |*dirs| try dirs.toOwnedSlice(self.allocator) else &.{},
         };
 
         // Validate ranges
@@ -197,11 +207,18 @@ const TomlParser = struct {
             self.log.info("default_applied", .{ .field = "server.host", .value = "0.0.0.0" });
         }
         if (self.tcp_port == null) {
-            self.log.info("default_applied", .{ .field = "server.tcp_port", .value = 17 });
+            self.log.info("default_applied", .{ .field = "server.tcp_port", .value = 8017 });
         }
         if (self.udp_port == null) {
-            self.log.info("default_applied", .{ .field = "server.udp_port", .value = 17 });
+            self.log.info("default_applied", .{ .field = "server.udp_port", .value = 8017 });
         }
+        if (self.health_enabled == null) {
+            self.log.info("default_applied", .{ .field = "health.enabled", .value = true });
+        }
+        if (self.health_port == null) {
+            self.log.info("default_applied", .{ .field = "health.port", .value = 8080 });
+        }
+            self.log.info("default_applied", .{ .field = "health.port", .value = 8080 });
 
         return config;
     }
@@ -251,6 +268,8 @@ const TomlParser = struct {
         if (section) |sec| {
             if (std.mem.eql(u8, sec, "server")) {
                 try self.parseServerValue(key);
+            } else if (std.mem.eql(u8, sec, "health")) {
+                try self.parseHealthValue(key);
             } else if (std.mem.eql(u8, sec, "quotes")) {
                 try self.parseQuotesValue(key);
             } else if (std.mem.eql(u8, sec, "polling")) {
@@ -279,7 +298,15 @@ const TomlParser = struct {
 
     fn parsePollingValue(self: *TomlParser, key: []const u8) !void {
         if (std.mem.eql(u8, key, "interval_seconds")) {
-            self.interval = try self.parseInteger(u32);
+            self.polling_interval = try self.parseInteger(u32);
+        }
+    }
+
+    fn parseHealthValue(self: *TomlParser, key: []const u8) !void {
+        if (std.mem.eql(u8, key, "enabled")) {
+            self.health_enabled = try self.parseBoolean();
+        } else if (std.mem.eql(u8, key, "port")) {
+            self.health_port = try self.parseInteger(u16);
         }
     }
 
@@ -305,6 +332,17 @@ const TomlParser = struct {
         }
         const value_str = self.content[start..self.pos];
         return std.fmt.parseInt(T, value_str, 10) catch return error.InvalidInteger;
+    }
+
+    fn parseBoolean(self: *TomlParser) !bool {
+        const start = self.pos;
+        while (self.pos < self.content.len and (std.ascii.isAlphabetic(self.content[self.pos]) or std.ascii.isDigit(self.content[self.pos]))) {
+            self.pos += 1;
+        }
+        const value_str = self.content[start..self.pos];
+        if (std.mem.eql(u8, value_str, "true")) return true;
+        if (std.mem.eql(u8, value_str, "false")) return false;
+        return error.InvalidBoolean;
     }
 
     fn parseStringArray(self: *TomlParser) !std.ArrayList([]const u8) {
@@ -362,8 +400,8 @@ test "minimal valid configuration" {
     var config = try parser.parse();
     defer config.deinit();
 
-    try std.testing.expectEqual(@as(u16, 17), config.tcp_port);
-    try std.testing.expectEqual(@as(u16, 17), config.udp_port);
+    try std.testing.expectEqual(@as(u16, 8017), config.tcp_port);
+    try std.testing.expectEqual(@as(u16, 8017), config.udp_port);
     try std.testing.expectEqualStrings("0.0.0.0", config.host);
     try std.testing.expectEqual(@as(usize, 1), config.directories.len);
     try std.testing.expectEqualStrings("/data/quotes", config.directories[0]);
@@ -464,3 +502,44 @@ test "configuration with comments" {
 
     try std.testing.expectEqual(SelectionMode.sequential, config.selection_mode);
 }
+
+
+test "health section parses correctly" {
+    const allocator = std.testing.allocator;
+    const content =
+        \\[quotes]
+        \\directories = ["/data/quotes"]
+        \\
+        \\[health]
+        \\enabled = true
+        \\port = 9090
+    ;
+
+    var parser = TomlParser.init(allocator, content);
+    defer parser.deinit();
+
+    var config = try parser.parse();
+    defer config.deinit();
+
+    try std.testing.expectEqual(true, config.health_enabled);
+    try std.testing.expectEqual(@as(u16, 9090), config.health_port);
+}
+
+test "health section defaults apply when missing" {
+    const allocator = std.testing.allocator;
+    const content =
+        \\[quotes]
+        \\directories = ["/data/quotes"]
+    ;
+
+    var parser = TomlParser.init(allocator, content);
+    defer parser.deinit();
+
+    var config = try parser.parse();
+    defer config.deinit();
+
+    try std.testing.expectEqual(true, config.health_enabled);
+    try std.testing.expectEqual(@as(u16, 8080), config.health_port);
+}
+
+
