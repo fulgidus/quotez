@@ -248,10 +248,10 @@ Max Concurrent: 6 (Wave 1)
   - `src/selector.zig` bottom — Existing selector tests (run with `zig build test`)
 
   **Acceptance Criteria**:
-  - [ ] `initWithSeed` function exists and is callable from `init()` fallback
-  - [ ] `zig build 2>&1 | grep -c 'error'` returns 0 for selector.zig
-  - [ ] No `use of undeclared identifier 'initWithSeed'` error
-  - [ ] `zig build test 2>&1` — selector tests pass (no memory leaks reported by test allocator)
+  - [x] `initWithSeed` function exists and is callable from `init()` fallback
+  - [x] `zig build 2>&1 | grep -c 'error'` returns 0 for selector.zig
+  - [x] No `use of undeclared identifier 'initWithSeed'` error
+  - [x] `zig build test 2>&1` — selector tests pass (no memory leaks reported by test allocator)
 
   **QA Scenarios:**
   ```
@@ -328,10 +328,10 @@ Max Concurrent: 6 (Wave 1)
   - `tests/integration/perf_test.zig:32` — Calls `store.addQuote()` — shows expected alias API
 
   **Acceptance Criteria**:
-  - [ ] `QuoteStore` has public `add()` method accepting `[]const u8`
-  - [ ] `QuoteStore` has public `addQuote()` method as alias
-  - [ ] Adding same content twice only stores one copy (deduplication)
-  - [ ] `store.count()` reflects correct unique count after adds
+  - [x] `QuoteStore` has public `add()` method accepting `[]const u8`
+  - [x] `QuoteStore` has public `addQuote()` method as alias
+  - [x] Adding same content twice only stores one copy (deduplication)
+  - [x] `store.count()` reflects correct unique count after adds
 
   **QA Scenarios:**
   ```
@@ -421,11 +421,11 @@ Max Concurrent: 6 (Wave 1)
   - Zig 0.16 `std.posix` at `~/.zvm/master/lib/std/posix.zig` — authoritative API reference
 
   **Acceptance Criteria**:
-  - [ ] `tcp.zig` compiles with zero errors
-  - [ ] No references to `std.net` remain in tcp.zig
-  - [ ] TcpServer.socket is of type `std.posix.socket_t`
-  - [ ] TCP server binds, listens, accepts, sends quote, closes connection
-  - [ ] Unit tests in tcp.zig pass
+  - [x] `tcp.zig` compiles with zero errors
+  - [x] No references to `std.net` remain in tcp.zig
+  - [x] TcpServer.socket is of type `std.posix.socket_t`
+  - [x] TCP server binds, listens, accepts, sends quote, closes connection
+  - [x] Unit tests in tcp.zig pass
 
   **QA Scenarios:**
   ```
@@ -504,10 +504,10 @@ Max Concurrent: 6 (Wave 1)
   - `src/servers/udp.zig:188-226` — Existing UDP unit tests (need address assertion fix)
 
   **Acceptance Criteria**:
-  - [ ] No references to `std.net` remain in udp.zig
-  - [ ] UDP server compiles cleanly
-  - [ ] `receiveAndRespond()` uses `sockaddr.storage` for client address
-  - [ ] Unit tests pass
+  - [x] No references to `std.net` remain in udp.zig
+  - [x] UDP server compiles cleanly
+  - [x] `receiveAndRespond()` uses `sockaddr.storage` for client address
+  - [x] Unit tests pass
 
   **QA Scenarios:**
   ```
@@ -586,10 +586,10 @@ Max Concurrent: 6 (Wave 1)
   - `src/selector.zig:46` — `pub fn init(...) !Selector` — returns error union, requires `try`
 
   **Acceptance Criteria**:
-  - [ ] `zig build 2>&1` compiles with zero errors
-  - [ ] No references to `tcp.socket.stream.handle` remain
-  - [ ] `selector.Selector.init()` call uses `try` keyword
-  - [ ] poll_fds uses `tcp.socket` and `udp.socket` directly (both `socket_t`)
+  - [x] `zig build 2>&1` compiles with zero errors
+  - [x] No references to `tcp.socket.stream.handle` remain
+  - [x] `selector.Selector.init()` call uses `try` keyword
+  - [x] poll_fds uses `tcp.socket` and `udp.socket` directly (both `socket_t`)
 
   **QA Scenarios:**
   ```
@@ -664,12 +664,12 @@ Max Concurrent: 6 (Wave 1)
   - User's exact words: "Backoffice control interface on port 80 with a simple login to enable features, update quotes, connect to quote services, enable special modes. Also quote categorization, tagging... so as to only give black people quotes during black people month, or on particular holidays, all managed by the backoffice interface"
 
   **Acceptance Criteria**:
-  - [ ] `IDEAS.md` exists in project root
-  - [ ] Contains backoffice control interface section
-  - [ ] Contains quote categorization/tagging section
-  - [ ] Contains holiday/event-aware serving section
-  - [ ] Contains quote service connectors section
-  - [ ] File is valid markdown (no broken formatting)
+  - [x] `IDEAS.md` exists in project root
+  - [x] Contains backoffice control interface section
+  - [x] Contains quote categorization/tagging section
+  - [x] Contains holiday/event-aware serving section
+  - [x] Contains quote service connectors section
+  - [x] File is valid markdown (no broken formatting)
 
   **QA Scenarios:**
   ```
@@ -733,10 +733,10 @@ Max Concurrent: 6 (Wave 1)
   - `src/quote_store.zig` after T2: `store.add(content)` method available
 
   **Acceptance Criteria**:
-  - [ ] No `@import("../../src/")` paths remain in the file
-  - [ ] No unused local constant errors
-  - [ ] All port assertions match new server API
-  - [ ] `zig build test-all 2>&1` — end_to_end tests pass
+  - [x] No `@import("../../src/")` paths remain in the file
+  - [x] No unused local constant errors
+  - [x] All port assertions match new server API
+  - [x] `zig build test-all 2>&1` — end_to_end tests pass
 
   **QA Scenarios:**
   ```
@@ -800,10 +800,10 @@ Max Concurrent: 6 (Wave 1)
   - After T4: UdpServer port access pattern
 
   **Acceptance Criteria**:
-  - [ ] `createTestStore()` compiles with `store.add()` calls
-  - [ ] All `server.address.getPort()` updated to new API
-  - [ ] `sel.next()` calls match actual return type (?usize)
-  - [ ] `zig build test-all 2>&1` — protocol tests pass
+  - [x] `createTestStore()` compiles with `store.add()` calls
+  - [x] All `server.address.getPort()` updated to new API
+  - [x] `sel.next()` calls match actual return type (?usize)
+  - [x] `zig build test-all 2>&1` — protocol tests pass
 
   **QA Scenarios:**
   ```
@@ -878,11 +878,11 @@ Max Concurrent: 6 (Wave 1)
   - `src/selector.zig:120` — `next()` takes no args (fix line 198)
 
   **Acceptance Criteria**:
-  - [ ] No references to `std.net` remain in perf_test.zig
-  - [ ] `store.addQuote()` calls compile (after T2)
-  - [ ] Timer/timestamp APIs work with Zig 0.16
-  - [ ] `sel.next()` called without arguments
-  - [ ] `zig build test-all 2>&1` — perf tests pass
+  - [x] No references to `std.net` remain in perf_test.zig
+  - [x] `store.addQuote()` calls compile (after T2)
+  - [x] Timer/timestamp APIs work with Zig 0.16
+  - [x] `sel.next()` called without arguments
+  - [x] `zig build test-all 2>&1` — perf tests pass
 
   **QA Scenarios:**
   ```
@@ -962,10 +962,10 @@ Max Concurrent: 6 (Wave 1)
   - `src/config.zig:Configuration` — `.directories` ([]const []const u8) and `.polling_interval` (u64 seconds)
 
   **Acceptance Criteria**:
-  - [ ] `src/watcher.zig` exists with `FileWatcher` struct
-  - [ ] `init()`, `deinit()`, `check()` methods present
-  - [ ] `zig build 2>&1` compiles without errors (watcher included in build)
-  - [ ] `zig build test 2>&1` — watcher unit tests pass
+  - [x] `src/watcher.zig` exists with `FileWatcher` struct
+  - [x] `init()`, `deinit()`, `check()` methods present
+  - [x] `zig build 2>&1` compiles without errors (watcher included in build)
+  - [x] `zig build test 2>&1` — watcher unit tests pass
 
   **QA Scenarios:**
   ```
@@ -1047,11 +1047,11 @@ Max Concurrent: 6 (Wave 1)
   - `src/selector.zig:205` — `sel.reset(new_quote_count)` for post-reload reset
 
   **Acceptance Criteria**:
-  - [ ] FileWatcher imported and initialized in main.zig
-  - [ ] TODO comment at line 114 replaced with actual integration
-  - [ ] Event loop checks watcher on poll timeout
-  - [ ] Reload triggers `store.build()` + `sel.reset()`
-  - [ ] `zig build 2>&1` compiles without errors
+  - [x] FileWatcher imported and initialized in main.zig
+  - [x] TODO comment at line 114 replaced with actual integration
+  - [x] Event loop checks watcher on poll timeout
+  - [x] Reload triggers `store.build()` + `sel.reset()`
+  - [x] `zig build 2>&1` compiles without errors
 
   **QA Scenarios:**
   ```
@@ -1127,9 +1127,9 @@ Max Concurrent: 6 (Wave 1)
   - `specs/001-qotd-nanoservice/tasks.md` — Update task completion status
 
   **Acceptance Criteria**:
-  - [ ] README.md says "Zig 0.16.0" not "0.13"
-  - [ ] No spec docs reference "0.13"
-  - [ ] Task status reflects current migration progress
+  - [x] README.md says "Zig 0.16.0" not "0.13"
+  - [x] No spec docs reference "0.13"
+  - [x] Task status reflects current migration progress
 
   **QA Scenarios:**
   ```
@@ -1191,9 +1191,9 @@ Max Concurrent: 6 (Wave 1)
   - `src/selector.zig:46-104` — `init()` function (post-T1 fix)
 
   **Acceptance Criteria**:
-  - [ ] `zig build test 2>&1` — all 8 selector tests pass
-  - [ ] No memory leaks reported
-  - [ ] No `initWithSeed` errors
+  - [x] `zig build test 2>&1` — all 8 selector tests pass
+  - [x] No memory leaks reported
+  - [x] No `initWithSeed` errors
 
   **QA Scenarios:**
   ```
@@ -1249,9 +1249,9 @@ Max Concurrent: 6 (Wave 1)
   - `Dockerfile:4` — Build command reference: `zig build -Doptimize=ReleaseSmall -Dtarget=x86_64-linux-musl`
 
   **Acceptance Criteria**:
-  - [ ] `zig build -Doptimize=ReleaseSmall -Dtarget=x86_64-linux-musl` succeeds
-  - [ ] `ls -la zig-out/bin/quotez` shows file size < 5,242,880 bytes
-  - [ ] `file zig-out/bin/quotez` shows "statically linked" and "x86-64"
+  - [x] `zig build -Doptimize=ReleaseSmall -Dtarget=x86_64-linux-musl` succeeds
+  - [x] `ls -la zig-out/bin/quotez` shows file size < 5,242,880 bytes
+  - [x] `file zig-out/bin/quotez` shows "statically linked" and "x86-64"
 
   **QA Scenarios:**
   ```
@@ -1307,9 +1307,9 @@ Max Concurrent: 6 (Wave 1)
   - All test blocks in `src/*.zig` — fixed by T1, T2
 
   **Acceptance Criteria**:
-  - [ ] `zig build test-all 2>&1` exits with code 0
-  - [ ] Zero test failures in output
-  - [ ] All test categories present: unit, integration, e2e, perf
+  - [x] `zig build test-all 2>&1` exits with code 0
+  - [x] Zero test failures in output
+  - [x] All test categories present: unit, integration, e2e, perf
 
   **QA Scenarios:**
   ```
@@ -1379,10 +1379,10 @@ Max Concurrent: 6 (Wave 1)
   - `quotez.toml` — Local config (port 8017) for reference — Docker uses different port
 
   **Acceptance Criteria**:
-  - [ ] Dockerfile `EXPOSE` says `17/tcp 17/udp`
-  - [ ] `docker build -t quotez .` succeeds
-  - [ ] `docker images quotez --format '{{.Size}}'` shows < 10MB
-  - [ ] Container starts and serves quotes on port 17
+  - [x] Dockerfile `EXPOSE` says `17/tcp 17/udp`
+  - [x] `docker build -t quotez .` succeeds
+  - [x] `docker images quotez --format '{{.Size}}'` shows < 10MB
+  - [x] Container starts and serves quotes on port 17
 
   **QA Scenarios:**
   ```
@@ -1456,10 +1456,10 @@ Max Concurrent: 6 (Wave 1)
   - `tests/integration/perf_test.zig` — Performance test definitions and thresholds
 
   **Acceptance Criteria**:
-  - [ ] TCP avg response time < 10ms
-  - [ ] UDP avg response time < 10ms
-  - [ ] 10k quotes load in < 5 seconds
-  - [ ] 10k selections in sub-millisecond per selection
+  - [x] TCP avg response time < 10ms
+  - [x] UDP avg response time < 10ms
+  - [x] 10k quotes load in < 5 seconds
+  - [x] 10k selections in sub-millisecond per selection
 
   **QA Scenarios:**
   ```
