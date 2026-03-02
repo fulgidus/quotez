@@ -3,10 +3,10 @@ const parser = @import("parser.zig");
 
 /// Parse JSON format: array of strings, object with "quotes" array, or array of objects with "quote"/"text" field
 pub fn parse(allocator: std.mem.Allocator, content: []const u8) !parser.ParseResult {
-    var quotes = std.ArrayList([]const u8).init(allocator);
+    var quotes: std.ArrayList([]const u8) = .{};
     errdefer {
         for (quotes.items) |quote| allocator.free(quote);
-        quotes.deinit();
+        quotes.deinit(allocator);
     }
 
     // Parse JSON
@@ -28,7 +28,7 @@ pub fn parse(allocator: std.mem.Allocator, content: []const u8) !parser.ParseRes
                 switch (item) {
                     .string => |str| {
                         if (try parser.normalizeQuote(allocator, str)) |normalized| {
-                            try quotes.append(normalized);
+                            try quotes.append(allocator, normalized);
                         }
                     },
                     .object => |obj| {
@@ -36,13 +36,13 @@ pub fn parse(allocator: std.mem.Allocator, content: []const u8) !parser.ParseRes
                         if (obj.get("quote")) |quote_val| {
                             if (quote_val == .string) {
                                 if (try parser.normalizeQuote(allocator, quote_val.string)) |normalized| {
-                                    try quotes.append(normalized);
+                                    try quotes.append(allocator, normalized);
                                 }
                             }
                         } else if (obj.get("text")) |text_val| {
                             if (text_val == .string) {
                                 if (try parser.normalizeQuote(allocator, text_val.string)) |normalized| {
-                                    try quotes.append(normalized);
+                                    try quotes.append(allocator, normalized);
                                 }
                             }
                         }
@@ -58,7 +58,7 @@ pub fn parse(allocator: std.mem.Allocator, content: []const u8) !parser.ParseRes
                     for (quotes_val.array.items) |item| {
                         if (item == .string) {
                             if (try parser.normalizeQuote(allocator, item.string)) |normalized| {
-                                try quotes.append(normalized);
+                                try quotes.append(allocator, normalized);
                             }
                         }
                     }
@@ -92,7 +92,7 @@ test "json - array of strings" {
     ;
 
     var result = try parse(allocator, content);
-    defer result.deinit();
+    defer result.deinit(allocator);
 
     try std.testing.expectEqual(@as(usize, 3), result.quotes.items.len);
     try std.testing.expectEqualStrings("First quote", result.quotes.items[0]);
@@ -107,7 +107,7 @@ test "json - object with quotes array" {
     ;
 
     var result = try parse(allocator, content);
-    defer result.deinit();
+    defer result.deinit(allocator);
 
     try std.testing.expectEqual(@as(usize, 2), result.quotes.items.len);
     try std.testing.expectEqualStrings("First quote", result.quotes.items[0]);
@@ -124,7 +124,7 @@ test "json - array of objects with quote field" {
     ;
 
     var result = try parse(allocator, content);
-    defer result.deinit();
+    defer result.deinit(allocator);
 
     try std.testing.expectEqual(@as(usize, 2), result.quotes.items.len);
     try std.testing.expectEqualStrings("First", result.quotes.items[0]);
@@ -141,7 +141,7 @@ test "json - array of objects with text field" {
     ;
 
     var result = try parse(allocator, content);
-    defer result.deinit();
+    defer result.deinit(allocator);
 
     try std.testing.expectEqual(@as(usize, 2), result.quotes.items.len);
     try std.testing.expectEqualStrings("First", result.quotes.items[0]);
@@ -155,7 +155,7 @@ test "json - mixed array (strings and objects)" {
     ;
 
     var result = try parse(allocator, content);
-    defer result.deinit();
+    defer result.deinit(allocator);
 
     try std.testing.expectEqual(@as(usize, 2), result.quotes.items.len);
     try std.testing.expectEqualStrings("Direct quote", result.quotes.items[0]);
@@ -185,7 +185,7 @@ test "json - trim whitespace" {
     ;
 
     var result = try parse(allocator, content);
-    defer result.deinit();
+    defer result.deinit(allocator);
 
     try std.testing.expectEqual(@as(usize, 3), result.quotes.items.len);
     try std.testing.expectEqualStrings("Leading spaces", result.quotes.items[0]);

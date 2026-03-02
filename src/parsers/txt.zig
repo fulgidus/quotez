@@ -3,10 +3,10 @@ const parser = @import("parser.zig");
 
 /// Parse plaintext format: one quote per line
 pub fn parse(allocator: std.mem.Allocator, content: []const u8) !parser.ParseResult {
-    var quotes = std.ArrayList([]const u8).init(allocator);
+    var quotes: std.ArrayList([]const u8) = .{}; // Zig 0.16 unmanaged ArrayList
     errdefer {
         for (quotes.items) |quote| allocator.free(quote);
-        quotes.deinit();
+        quotes.deinit(allocator); // Pass allocator to deinit in Zig 0.16
     }
 
     // Split by newlines
@@ -14,7 +14,7 @@ pub fn parse(allocator: std.mem.Allocator, content: []const u8) !parser.ParseRes
     while (it.next()) |line| {
         // Normalize and trim each line
         if (try parser.normalizeQuote(allocator, line)) |normalized| {
-            try quotes.append(normalized);
+            try quotes.append(allocator, normalized); // Pass allocator in Zig 0.16
         }
     }
 

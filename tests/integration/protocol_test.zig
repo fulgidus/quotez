@@ -4,10 +4,11 @@ const testing = std.testing;
 // Integration tests for RFC 865 protocol compliance
 // Tests both TCP and UDP QOTD servers
 
-const quote_store = @import("../../src/quote_store.zig");
-const selector_mod = @import("../../src/selector.zig");
-const tcp_server = @import("../../src/servers/tcp.zig");
-const udp_server = @import("../../src/servers/udp.zig");
+const src = @import("src");
+const quote_store = src.quote_store_mod;
+const selector_mod = src.selector_mod;
+const tcp_server = src.tcp_server_mod;
+const udp_server = src.udp_server_mod;
 
 // Helper to create a test quote store with sample data
 fn createTestStore(allocator: std.mem.Allocator) !quote_store.QuoteStore {
@@ -38,7 +39,7 @@ test "TCP server RFC 865 compliance - single quote per connection" {
     defer server.deinit();
     
     // Verify server is bound to correct port
-    try testing.expectEqual(@as(u16, 18017), server.address.getPort());
+    try testing.expectEqual(@as(u16, 18017), std.mem.bigToNative(u16, server.address.port));
     
     // Verify store has quotes
     try testing.expect(!store.isEmpty());
@@ -81,7 +82,7 @@ test "UDP server RFC 865 compliance - datagram response" {
     defer server.deinit();
     
     // Verify server is bound to correct port
-    try testing.expectEqual(@as(u16, 18019), server.address.getPort());
+    try testing.expectEqual(@as(u16, 18019), std.mem.bigToNative(u16, server.address.port));
     
     // Verify store has quotes
     try testing.expect(!store.isEmpty());
@@ -154,8 +155,8 @@ test "TCP and UDP servers can coexist on different ports" {
     defer udp.deinit();
     
     // Both should be initialized successfully
-    try testing.expectEqual(@as(u16, 18022), tcp.address.getPort());
-    try testing.expectEqual(@as(u16, 18023), udp.address.getPort());
+    try testing.expectEqual(@as(u16, 18022), std.mem.bigToNative(u16, tcp.address.port));
+    try testing.expectEqual(@as(u16, 18023), std.mem.bigToNative(u16, udp.address.port));
 }
 
 test "TCP and UDP servers can share the same port" {
@@ -183,8 +184,8 @@ test "TCP and UDP servers can share the same port" {
     defer udp.deinit();
     
     // Both should be initialized successfully on the same port
-    try testing.expectEqual(test_port, tcp.address.getPort());
-    try testing.expectEqual(test_port, udp.address.getPort());
+    try testing.expectEqual(test_port, std.mem.bigToNative(u16, tcp.address.port));
+    try testing.expectEqual(test_port, std.mem.bigToNative(u16, udp.address.port));
 }
 
 test "Selection modes work across TCP and UDP" {
@@ -198,20 +199,20 @@ test "Selection modes work across TCP and UDP" {
     defer sel.deinit();
     
     // First selection should be index 0
-    const idx1 = try sel.next();
-    try testing.expectEqual(@as(usize, 0), idx1);
+    const idx1 = sel.next();
+    try testing.expectEqual(@as(?usize, 0), idx1);
     
     // Second selection should be index 1
-    const idx2 = try sel.next();
-    try testing.expectEqual(@as(usize, 1), idx2);
+    const idx2 = sel.next();
+    try testing.expectEqual(@as(?usize, 1), idx2);
     
     // Third selection should be index 2
-    const idx3 = try sel.next();
-    try testing.expectEqual(@as(usize, 2), idx3);
+    const idx3 = sel.next();
+    try testing.expectEqual(@as(?usize, 2), idx3);
     
     // Fourth should wrap around to 0
-    const idx4 = try sel.next();
-    try testing.expectEqual(@as(usize, 0), idx4);
+    const idx4 = sel.next();
+    try testing.expectEqual(@as(?usize, 0), idx4);
 }
 
 test "Quote store deduplication works" {

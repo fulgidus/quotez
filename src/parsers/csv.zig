@@ -3,10 +3,10 @@ const parser = @import("parser.zig");
 
 /// Parse CSV format: extract first column from each row
 pub fn parse(allocator: std.mem.Allocator, content: []const u8) !parser.ParseResult {
-    var quotes = std.ArrayList([]const u8).init(allocator);
+    var quotes: std.ArrayList([]const u8) = .{};
     errdefer {
         for (quotes.items) |quote| allocator.free(quote);
-        quotes.deinit();
+        quotes.deinit(allocator);
     }
 
     // Detect delimiter (comma or tab)
@@ -33,7 +33,7 @@ pub fn parse(allocator: std.mem.Allocator, content: []const u8) !parser.ParseRes
         // Extract first column
         if (try extractFirstColumn(allocator, trimmed_line, delimiter)) |column_value| {
             if (try parser.normalizeQuote(allocator, column_value)) |normalized| {
-                try quotes.append(normalized);
+                try quotes.append(allocator, normalized);
             }
             allocator.free(column_value);
         }
@@ -65,13 +65,14 @@ fn detectDelimiter(content: []const u8) u8 {
 
 /// Check if line looks like a header
 fn isHeader(line: []const u8) bool {
-    const lower = std.ascii.lowerString(line, line) catch return false;
-    defer {};
-    
-    // Check for common header keywords
-    return std.mem.indexOf(u8, line, "quote") != null or
-        std.mem.indexOf(u8, line, "text") != null or
-        std.mem.indexOf(u8, line, "content") != null;
+    // Check for common header keywords (case-insensitive)
+    const lower_keywords = [_][]const u8{ "quote", "text", "content" };
+    for (lower_keywords) |keyword| {
+        if (std.ascii.indexOfIgnoreCase(line, keyword) != null) {
+            return true;
+        }
+    }
+    return false;
 }
 
 /// Extract first column from CSV line
@@ -81,26 +82,26 @@ fn extractFirstColumn(allocator: std.mem.Allocator, line: []const u8, delimiter:
     // Handle quoted field: "text with, comma"
     if (line[0] == '"') {
         var i: usize = 1;
-        var result = std.ArrayList(u8).init(allocator);
-        errdefer result.deinit();
+        var result: std.ArrayList(u8) = .{};
+        errdefer result.deinit(allocator);
 
         while (i < line.len) : (i += 1) {
             if (line[i] == '"') {
                 // Check if it's an escaped quote ""
                 if (i + 1 < line.len and line[i + 1] == '"') {
-                    try result.append('"');
+                    try result.append(allocator, '"');
                     i += 1;
                 } else {
                     // End of quoted field
-                    return try result.toOwnedSlice();
+                    return try result.toOwnedSlice(allocator);
                 }
             } else {
-                try result.append(line[i]);
+                try result.append(allocator, line[i]);
             }
         }
 
         // Unclosed quote - return what we have
-        return try result.toOwnedSlice();
+        return try result.toOwnedSlice(allocator);
     }
 
     // Unquoted field: extract until delimiter
@@ -126,7 +127,7 @@ test "csv - basic parsing with header" {
     ;
 
     var result = try parse(allocator, content);
-    defer result.deinit();
+    defer result.deinit(allocator);
 
     try std.testing.expectEqual(@as(usize, 2), result.quotes.items.len);
     try std.testing.expectEqualStrings("First quote", result.quotes.items[0]);
@@ -141,7 +142,7 @@ test "csv - no header" {
     ;
 
     var result = try parse(allocator, content);
-    defer result.deinit();
+    defer result.deinit(allocator);
 
     try std.testing.expectEqual(@as(usize, 2), result.quotes.items.len);
     try std.testing.expectEqualStrings("First quote", result.quotes.items[0]);
@@ -157,7 +158,7 @@ test "csv - quoted fields with commas" {
     ;
 
     var result = try parse(allocator, content);
-    defer result.deinit();
+    defer result.deinit(allocator);
 
     try std.testing.expectEqual(@as(usize, 2), result.quotes.items.len);
     try std.testing.expectEqualStrings("First, with comma", result.quotes.items[0]);
@@ -169,7 +170,7 @@ test "csv - tab delimiter" {
     const content = "quote\tauthor\nFirst quote\tSomeone\nSecond quote\tOther";
 
     var result = try parse(allocator, content);
-    defer result.deinit();
+    defer result.deinit(allocator);
 
     try std.testing.expectEqual(@as(usize, 2), result.quotes.items.len);
     try std.testing.expectEqualStrings("First quote", result.quotes.items[0]);
@@ -185,7 +186,7 @@ test "csv - single column (no delimiter)" {
     ;
 
     var result = try parse(allocator, content);
-    defer result.deinit();
+    defer result.deinit(allocator);
 
     try std.testing.expectEqual(@as(usize, 3), result.quotes.items.len);
     try std.testing.expectEqualStrings("First quote", result.quotes.items[0]);
@@ -203,7 +204,7 @@ test "csv - skip empty lines" {
     ;
 
     var result = try parse(allocator, content);
-    defer result.deinit();
+    defer result.deinit(allocator);
 
     try std.testing.expectEqual(@as(usize, 2), result.quotes.items.len);
     try std.testing.expectEqualStrings("First quote", result.quotes.items[0]);
@@ -218,7 +219,7 @@ test "csv - escaped quotes" {
     ;
 
     var result = try parse(allocator, content);
-    defer result.deinit();
+    defer result.deinit(allocator);
 
     try std.testing.expectEqual(@as(usize, 1), result.quotes.items.len);
     try std.testing.expectEqualStrings("Quote with \"escaped\" quotes", result.quotes.items[0]);

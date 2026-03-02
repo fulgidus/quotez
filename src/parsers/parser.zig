@@ -22,11 +22,11 @@ pub const ParseResult = struct {
     quotes: std.ArrayList([]const u8),
     format: Format,
 
-    pub fn deinit(self: *ParseResult) void {
+    pub fn deinit(self: *ParseResult, allocator: std.mem.Allocator) void {
         for (self.quotes.items) |quote| {
-            self.quotes.allocator.free(quote);
+            allocator.free(quote);
         }
-        self.quotes.deinit();
+        self.quotes.deinit(allocator);
     }
 };
 
@@ -138,34 +138,34 @@ pub fn normalizeQuote(allocator: std.mem.Allocator, input: []const u8) !?[]const
     if (trimmed.len == 0) return null;
 
     // Validate UTF-8 and replace invalid sequences
-    var result = std.ArrayList(u8).init(allocator);
-    errdefer result.deinit();
+    var result: std.ArrayList(u8) = .{};
+    errdefer result.deinit(allocator);
 
     var i: usize = 0;
     while (i < trimmed.len) {
         const len = std.unicode.utf8ByteSequenceLength(trimmed[i]) catch {
             // Invalid UTF-8, insert replacement character
-            try result.appendSlice("�");
+            try result.appendSlice(allocator, "�");
             i += 1;
             continue;
         };
 
         if (i + len > trimmed.len) {
             // Incomplete sequence at end
-            try result.appendSlice("�");
+            try result.appendSlice(allocator, "�");
             break;
         }
 
         // Validate the full sequence
         _ = std.unicode.utf8Decode(trimmed[i .. i + len]) catch {
             // Invalid sequence
-            try result.appendSlice("�");
+            try result.appendSlice(allocator, "�");
             i += len;
             continue;
         };
 
         // Valid UTF-8, copy it
-        try result.appendSlice(trimmed[i .. i + len]);
+        try result.appendSlice(allocator, trimmed[i .. i + len]);
         i += len;
     }
 
@@ -175,23 +175,23 @@ pub fn normalizeQuote(allocator: std.mem.Allocator, input: []const u8) !?[]const
 
 /// Collapse multiple whitespace characters into single spaces
 fn collapseWhitespace(allocator: std.mem.Allocator, input: []const u8) ![]const u8 {
-    var result = std.ArrayList(u8).init(allocator);
-    errdefer result.deinit();
+    var result: std.ArrayList(u8) = .{};
+    errdefer result.deinit(allocator);
 
     var prev_was_space = false;
     for (input) |c| {
         if (std.ascii.isWhitespace(c)) {
             if (!prev_was_space) {
-                try result.append(' ');
+                try result.append(allocator, ' ');
                 prev_was_space = true;
             }
         } else {
-            try result.append(c);
+            try result.append(allocator, c);
             prev_was_space = false;
         }
     }
 
-    return result.toOwnedSlice();
+    return result.toOwnedSlice(allocator);
 }
 
 // Tests

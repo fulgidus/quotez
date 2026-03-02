@@ -4,10 +4,10 @@ const parser = @import("parser.zig");
 /// Simple YAML parser for quote lists
 /// Supports: list of strings, list of objects with quote/text field, and quotes: [...] structure
 pub fn parse(allocator: std.mem.Allocator, content: []const u8) !parser.ParseResult {
-    var quotes = std.ArrayList([]const u8).init(allocator);
+    var quotes: std.ArrayList([]const u8) = .{};
     errdefer {
         for (quotes.items) |quote| allocator.free(quote);
-        quotes.deinit();
+        quotes.deinit(allocator);
     }
 
     var in_quotes_array = false;
@@ -39,7 +39,7 @@ pub fn parse(allocator: std.mem.Allocator, content: []const u8) !parser.ParseRes
             // Direct string: "- Some quote"
             if (item_content.len > 0 and item_content[0] != '"' and std.mem.indexOf(u8, item_content, ":") == null) {
                 if (try parser.normalizeQuote(allocator, item_content)) |normalized| {
-                    try quotes.append(normalized);
+                    try quotes.append(allocator, normalized);
                 }
                 current_obj_indent = null;
                 continue;
@@ -49,7 +49,7 @@ pub fn parse(allocator: std.mem.Allocator, content: []const u8) !parser.ParseRes
             if (item_content.len > 0 and item_content[0] == '"') {
                 if (try extractQuotedString(allocator, item_content)) |str| {
                     if (try parser.normalizeQuote(allocator, str)) |normalized| {
-                        try quotes.append(normalized);
+                        try quotes.append(allocator, normalized);
                     }
                     allocator.free(str);
                 }
@@ -61,7 +61,7 @@ pub fn parse(allocator: std.mem.Allocator, content: []const u8) !parser.ParseRes
             if (std.mem.indexOf(u8, item_content, "quote:")) |_| {
                 if (try extractYamlValue(allocator, item_content, "quote:")) |str| {
                     if (try parser.normalizeQuote(allocator, str)) |normalized| {
-                        try quotes.append(normalized);
+                        try quotes.append(allocator, normalized);
                     }
                     allocator.free(str);
                 }
@@ -72,7 +72,7 @@ pub fn parse(allocator: std.mem.Allocator, content: []const u8) !parser.ParseRes
             if (std.mem.indexOf(u8, item_content, "text:")) |_| {
                 if (try extractYamlValue(allocator, item_content, "text:")) |str| {
                     if (try parser.normalizeQuote(allocator, str)) |normalized| {
-                        try quotes.append(normalized);
+                        try quotes.append(allocator, normalized);
                     }
                     allocator.free(str);
                 }
@@ -92,7 +92,7 @@ pub fn parse(allocator: std.mem.Allocator, content: []const u8) !parser.ParseRes
                     const key = if (std.mem.startsWith(u8, trimmed, "quote:")) "quote:" else "text:";
                     if (try extractYamlValue(allocator, trimmed, key)) |str| {
                         if (try parser.normalizeQuote(allocator, str)) |normalized| {
-                            try quotes.append(normalized);
+                            try quotes.append(allocator, normalized);
                         }
                         allocator.free(str);
                     }
@@ -110,13 +110,13 @@ pub fn parse(allocator: std.mem.Allocator, content: []const u8) !parser.ParseRes
                 if (item.len > 0 and item[0] == '"') {
                     if (try extractQuotedString(allocator, item)) |str| {
                         if (try parser.normalizeQuote(allocator, str)) |normalized| {
-                            try quotes.append(normalized);
+                            try quotes.append(allocator, normalized);
                         }
                         allocator.free(str);
                     }
                 } else {
                     if (try parser.normalizeQuote(allocator, item)) |normalized| {
-                        try quotes.append(normalized);
+                        try quotes.append(allocator, normalized);
                     }
                 }
             }
@@ -201,7 +201,7 @@ test "yaml - list of strings" {
     ;
 
     var result = try parse(allocator, content);
-    defer result.deinit();
+    defer result.deinit(allocator);
 
     try std.testing.expectEqual(@as(usize, 3), result.quotes.items.len);
     try std.testing.expectEqualStrings("First quote", result.quotes.items[0]);
@@ -218,7 +218,7 @@ test "yaml - list of quoted strings" {
     ;
 
     var result = try parse(allocator, content);
-    defer result.deinit();
+    defer result.deinit(allocator);
 
     try std.testing.expectEqual(@as(usize, 2), result.quotes.items.len);
     try std.testing.expectEqualStrings("First quote", result.quotes.items[0]);
@@ -236,7 +236,7 @@ test "yaml - list of objects with quote field" {
     ;
 
     var result = try parse(allocator, content);
-    defer result.deinit();
+    defer result.deinit(allocator);
 
     try std.testing.expectEqual(@as(usize, 2), result.quotes.items.len);
     try std.testing.expectEqualStrings("First quote", result.quotes.items[0]);
@@ -254,7 +254,7 @@ test "yaml - list of objects with text field" {
     ;
 
     var result = try parse(allocator, content);
-    defer result.deinit();
+    defer result.deinit(allocator);
 
     try std.testing.expectEqual(@as(usize, 2), result.quotes.items.len);
     try std.testing.expectEqualStrings("First quote", result.quotes.items[0]);
@@ -271,7 +271,7 @@ test "yaml - quotes key with array" {
     ;
 
     var result = try parse(allocator, content);
-    defer result.deinit();
+    defer result.deinit(allocator);
 
     try std.testing.expectEqual(@as(usize, 2), result.quotes.items.len);
     try std.testing.expectEqualStrings("First quote", result.quotes.items[0]);
@@ -289,7 +289,7 @@ test "yaml - with comments" {
     ;
 
     var result = try parse(allocator, content);
-    defer result.deinit();
+    defer result.deinit(allocator);
 
     try std.testing.expectEqual(@as(usize, 2), result.quotes.items.len);
     try std.testing.expectEqualStrings("First quote", result.quotes.items[0]);

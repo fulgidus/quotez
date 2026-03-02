@@ -4,10 +4,10 @@ const parser = @import("parser.zig");
 /// Simple TOML parser for quote arrays
 /// Supports: quotes = ["quote1", "quote2"] and [[quotes]] tables with text/quote field
 pub fn parse(allocator: std.mem.Allocator, content: []const u8) !parser.ParseResult {
-    var quotes = std.ArrayList([]const u8).init(allocator);
+    var quotes: std.ArrayList([]const u8) = .{};
     errdefer {
         for (quotes.items) |quote| allocator.free(quote);
-        quotes.deinit();
+        quotes.deinit(allocator);
     }
 
     var in_array = false;
@@ -33,13 +33,16 @@ pub fn parse(allocator: std.mem.Allocator, content: []const u8) !parser.ParseRes
             in_array = true;
             // Try to extract quotes from the same line
             if (try extractQuotesFromLine(allocator, trimmed)) |line_quotes| {
+                defer {
+                    var list = line_quotes;
+                    list.deinit(allocator);
+                }
                 for (line_quotes.items) |q| {
                     if (try parser.normalizeQuote(allocator, q)) |normalized| {
-                        try quotes.append(normalized);
+                        try quotes.append(allocator, normalized);
                     }
                     allocator.free(q);
                 }
-                line_quotes.deinit();
             }
 
             // Check if array closes on same line
@@ -52,13 +55,16 @@ pub fn parse(allocator: std.mem.Allocator, content: []const u8) !parser.ParseRes
         // Continue array extraction
         if (in_array) {
             if (try extractQuotesFromLine(allocator, trimmed)) |line_quotes| {
+                defer {
+                    var list = line_quotes;
+                    list.deinit(allocator);
+                }
                 for (line_quotes.items) |q| {
                     if (try parser.normalizeQuote(allocator, q)) |normalized| {
-                        try quotes.append(normalized);
+                        try quotes.append(allocator, normalized);
                     }
                     allocator.free(q);
                 }
-                line_quotes.deinit();
             }
 
             if (std.mem.indexOf(u8, trimmed, "]") != null) {
@@ -74,7 +80,7 @@ pub fn parse(allocator: std.mem.Allocator, content: []const u8) !parser.ParseRes
                     const value_part = std.mem.trim(u8, trimmed[eq_pos + 1 ..], &std.ascii.whitespace);
                     if (try extractString(allocator, value_part)) |str| {
                         if (try parser.normalizeQuote(allocator, str)) |normalized| {
-                            try quotes.append(normalized);
+                            try quotes.append(allocator, normalized);
                         }
                         allocator.free(str);
                     }
@@ -100,10 +106,10 @@ pub fn parse(allocator: std.mem.Allocator, content: []const u8) !parser.ParseRes
 
 /// Extract quoted strings from a line
 fn extractQuotesFromLine(allocator: std.mem.Allocator, line: []const u8) !?std.ArrayList([]const u8) {
-    var results = std.ArrayList([]const u8).init(allocator);
+    var results: std.ArrayList([]const u8) = .{};
     errdefer {
         for (results.items) |item| allocator.free(item);
-        results.deinit();
+        results.deinit(allocator);
     }
 
     var i: usize = 0;
@@ -117,7 +123,7 @@ fn extractQuotesFromLine(allocator: std.mem.Allocator, line: []const u8) !?std.A
 
             if (i > start) {
                 const str = try allocator.dupe(u8, line[start..i]);
-                try results.append(str);
+                try results.append(allocator, str);
             }
 
             if (i < line.len) i += 1; // Skip closing quote
@@ -127,7 +133,7 @@ fn extractQuotesFromLine(allocator: std.mem.Allocator, line: []const u8) !?std.A
     }
 
     if (results.items.len == 0) {
-        results.deinit();
+        results.deinit(allocator);
         return null;
     }
 
@@ -161,7 +167,7 @@ test "toml - array of strings" {
     ;
 
     var result = try parse(allocator, content);
-    defer result.deinit();
+    defer result.deinit(allocator);
 
     try std.testing.expectEqual(@as(usize, 3), result.quotes.items.len);
     try std.testing.expectEqualStrings("First quote", result.quotes.items[0]);
@@ -180,7 +186,7 @@ test "toml - multi-line array" {
     ;
 
     var result = try parse(allocator, content);
-    defer result.deinit();
+    defer result.deinit(allocator);
 
     try std.testing.expectEqual(@as(usize, 3), result.quotes.items.len);
     try std.testing.expectEqualStrings("First quote", result.quotes.items[0]);
@@ -201,7 +207,7 @@ test "toml - array of tables with text field" {
     ;
 
     var result = try parse(allocator, content);
-    defer result.deinit();
+    defer result.deinit(allocator);
 
     try std.testing.expectEqual(@as(usize, 2), result.quotes.items.len);
     try std.testing.expectEqualStrings("First quote", result.quotes.items[0]);
@@ -219,7 +225,7 @@ test "toml - array of tables with quote field" {
     ;
 
     var result = try parse(allocator, content);
-    defer result.deinit();
+    defer result.deinit(allocator);
 
     try std.testing.expectEqual(@as(usize, 2), result.quotes.items.len);
     try std.testing.expectEqualStrings("First quote", result.quotes.items[0]);
@@ -237,7 +243,7 @@ test "toml - with comments" {
     ;
 
     var result = try parse(allocator, content);
-    defer result.deinit();
+    defer result.deinit(allocator);
 
     try std.testing.expectEqual(@as(usize, 2), result.quotes.items.len);
     try std.testing.expectEqualStrings("First quote", result.quotes.items[0]);

@@ -34,8 +34,16 @@ pub const Logger = struct {
         defer self.mutex.unlock();
 
         // Write timestamp, level, and event
-        const timestamp = std.time.timestamp();
-        std.debug.print("[{d}] {s} {s}", .{ timestamp, level.asString(), event });
+        // Use Instant.now() for Unix epoch time in Zig 0.16
+        const instant = std.time.Instant.now() catch {
+            // If Instant.now() fails, use 0
+            std.debug.print("[0] {s} {s}", .{ level.asString(), event });
+            return;
+        };
+        const sec = instant.timestamp.sec;
+        const nsec = instant.timestamp.nsec;
+        const ms = sec * 1000 + @divTrunc(nsec, 1_000_000);
+        std.debug.print("[{d}] {s} {s}", .{ ms, level.asString(), event });
 
         // Write structured fields
         const FieldsType = @TypeOf(fields);

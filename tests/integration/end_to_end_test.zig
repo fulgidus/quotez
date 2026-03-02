@@ -4,8 +4,11 @@ const testing = std.testing;
 // End-to-end integration test for full service lifecycle
 // Tests: startup → TCP serve → UDP serve → shutdown
 
+
+const src = @import("src");
 test "end to end service lifecycle" {
     const allocator = testing.allocator;
+
     
     // This test verifies the integration of all components:
     // 1. Configuration loading
@@ -15,11 +18,11 @@ test "end to end service lifecycle" {
     // 5. Event loop operation (would need subprocess to test fully)
     
     // For now, we verify that all components can be initialized together
-    const config_mod = @import("../../src/config.zig");
-    const quote_store_mod = @import("../../src/quote_store.zig");
-    const selector_mod = @import("../../src/selector.zig");
-    const tcp_server_mod = @import("../../src/servers/tcp.zig");
-    const udp_server_mod = @import("../../src/servers/udp.zig");
+    const quote_store_mod = src.quote_store_mod;
+    const selector_mod = src.selector_mod;
+    const tcp_server_mod = src.tcp_server_mod;
+    const udp_server_mod = src.udp_server_mod;
+
     
     // Note: Full subprocess testing would require zig build artifacts
     // This test verifies component integration without spawning a subprocess
@@ -64,8 +67,8 @@ test "end to end service lifecycle" {
     defer udp.deinit();
     
     // Verify both servers initialized
-    try testing.expectEqual(@as(u16, 18025), tcp.address.getPort());
-    try testing.expectEqual(@as(u16, 18026), udp.address.getPort());
+    try testing.expectEqual(@as(u16, 18025), std.mem.bigToNative(u16, tcp.address.port));
+    try testing.expectEqual(@as(u16, 18026), std.mem.bigToNative(u16, udp.address.port));
     
     // Verify selector works
     const quote_idx = sel.next();
@@ -79,7 +82,7 @@ test "end to end service lifecycle" {
 }
 
 test "graceful shutdown integration" {
-    const allocator = testing.allocator;
+
     
     // Test that shutdown flag properly stops the event loop concept
     var shutdown_requested = std.atomic.Value(bool).init(false);
@@ -95,11 +98,11 @@ test "graceful shutdown integration" {
 test "configuration to server integration" {
     const allocator = testing.allocator;
     
-    const config_mod = @import("../../src/config.zig");
-    const tcp_server_mod = @import("../../src/servers/tcp.zig");
-    const udp_server_mod = @import("../../src/servers/udp.zig");
-    const quote_store_mod = @import("../../src/quote_store.zig");
-    const selector_mod = @import("../../src/selector.zig");
+
+    const tcp_server_mod = src.tcp_server_mod;
+    const udp_server_mod = src.udp_server_mod;
+    const quote_store_mod = src.quote_store_mod;
+    const selector_mod = src.selector_mod;
     
     // Verify configuration values can be used to initialize servers
     var store = quote_store_mod.QuoteStore.init(allocator);
@@ -140,15 +143,15 @@ test "configuration to server integration" {
     };
     defer udp.deinit();
     
-    try testing.expectEqual(test_tcp_port, tcp.address.getPort());
-    try testing.expectEqual(test_udp_port, udp.address.getPort());
+    try testing.expectEqual(test_tcp_port, std.mem.bigToNative(u16, tcp.address.port));
+    try testing.expectEqual(test_udp_port, std.mem.bigToNative(u16, udp.address.port));
 }
 
 test "selection mode integration across servers" {
     const allocator = testing.allocator;
     
-    const quote_store_mod = @import("../../src/quote_store.zig");
-    const selector_mod = @import("../../src/selector.zig");
+    const quote_store_mod = src.quote_store_mod;
+    const selector_mod = src.selector_mod;
     
     var store = quote_store_mod.QuoteStore.init(allocator);
     defer store.deinit();

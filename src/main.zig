@@ -225,3 +225,11 @@ fn runEventLoop(
         poll_fds[1].revents = 0;
     }
 }
+
+// Module exports for tests
+pub const config_mod = config;
+pub const logger_mod = logger;
+pub const quote_store_mod = quote_store;
+pub const selector_mod = selector;
+pub const tcp_server_mod = tcp_server;
+pub const udp_server_mod = udp_server;
