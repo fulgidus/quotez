@@ -825,7 +825,7 @@ Max Concurrent: 6 (Wave 1)
 
 ---
 
-- [ ] 9. Fix perf_test.zig — Remove std.net, Fix addQuote(), Fix nanoTimestamp/Timer
+- [x] 9. Fix perf_test.zig — Remove std.net, Fix addQuote(), Fix nanoTimestamp/Timer
 
   **What to do**:
   - Line 3: `const net = std.net;` — REMOVE this entirely. `std.net` doesn't exist in Zig 0.16
@@ -1417,7 +1417,7 @@ Max Concurrent: 6 (Wave 1)
 
 ---
 
-- [ ] 17. Performance Benchmarks Verification
+- [x] 17. Performance Benchmarks Verification
 
   **What to do**:
   - Build the release binary: `zig build -Doptimize=ReleaseFast`
