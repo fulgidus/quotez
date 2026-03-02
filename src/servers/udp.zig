@@ -137,8 +137,8 @@ pub const UdpServer = struct {
         }
 
         // Select next quote
-        const quote_index = try self.selector.next();
-        const quote = self.store.get(quote_index) orelse {
+        const quote_index = self.selector.next();
+        const quote = (if (quote_index) |qi| self.store.get(qi) else null) orelse {
             // Quote index out of bounds (shouldn't happen)
             self.log.warn("udp_invalid_quote_index", .{ .index = quote_index });
             return;
@@ -177,10 +177,10 @@ pub const UdpServer = struct {
         ) catch |err| {
             // UDP is best-effort, log and drop on error
             switch (err) {
-                error.MessageTooBig => {
+                error.MessageOversize => {
                     self.log.warn("udp_send_message_too_big", .{ .size = response.len });
                 },
-                error.NetworkUnreachable, error.HostUnreachable => {
+                error.NetworkUnreachable, error.UnreachableAddress => {
                     self.log.debug("udp_client_unreachable", .{});
                 },
                 else => {

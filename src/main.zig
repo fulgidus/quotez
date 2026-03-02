@@ -50,7 +50,7 @@ pub fn main() !void {
     }
 
     // Initialize selector with the configured mode
-    var sel = selector.Selector.init(allocator, cfg.selection_mode, store.count());
+    var sel = try selector.Selector.init(allocator, cfg.selection_mode, store.count());
     defer sel.deinit();
 
     log.info("initialization_complete", .{
@@ -126,18 +126,18 @@ fn setupSignalHandlers(shutdown_requested: *std.atomic.Value(bool)) !void {
     // Register SIGTERM handler
     const sigterm_action = std.posix.Sigaction{
         .handler = .{ .handler = handleShutdownSignal },
-        .mask = std.posix.empty_sigset,
+        .mask = std.posix.sigemptyset(),
         .flags = 0,
     };
-    try std.posix.sigaction(std.posix.SIG.TERM, &sigterm_action, null);
+    std.posix.sigaction(std.posix.SIG.TERM, &sigterm_action, null);
 
     // Register SIGINT handler (Ctrl+C)
     const sigint_action = std.posix.Sigaction{
         .handler = .{ .handler = handleShutdownSignal },
-        .mask = std.posix.empty_sigset,
+        .mask = std.posix.sigemptyset(),
         .flags = 0,
     };
-    try std.posix.sigaction(std.posix.SIG.INT, &sigint_action, null);
+    std.posix.sigaction(std.posix.SIG.INT, &sigint_action, null);
 
     // Store the shutdown flag pointer for signal handlers
     shutdown_flag = shutdown_requested;
@@ -147,7 +147,7 @@ fn setupSignalHandlers(shutdown_requested: *std.atomic.Value(bool)) !void {
 var shutdown_flag: ?*std.atomic.Value(bool) = null;
 
 /// Signal handler for SIGTERM and SIGINT
-fn handleShutdownSignal(_: c_int) callconv(.C) void {
+fn handleShutdownSignal(_: std.posix.SIG) callconv(.c) void {
     if (shutdown_flag) |flag| {
         flag.store(true, .seq_cst);
     }
@@ -161,14 +161,14 @@ fn runEventLoop(
     shutdown_requested: *std.atomic.Value(bool),
 ) !void {
     log.info("event_loop_started", .{
-        .tcp_fd = tcp.socket.stream.handle,
+        .tcp_fd = tcp.socket,
         .udp_fd = udp.socket,
     });
 
     // Set up poll file descriptors
     var poll_fds = [_]std.posix.pollfd{
         .{
-            .fd = tcp.socket.stream.handle,
+            .fd = tcp.socket,
             .events = std.posix.POLL.IN,
             .revents = 0,
         },

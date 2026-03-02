@@ -120,7 +120,7 @@ pub const TcpServer = struct {
             // Non-fatal errors that we can recover from
             switch (err) {
                 error.WouldBlock => return, // No connection available
-                error.ConnectionAborted, error.ConnectionResetByPeer => {
+                error.ConnectionAborted => {
                     self.log.warn("tcp_accept_error", .{ .err = @errorName(err) });
                     return;
                 },
@@ -137,8 +137,8 @@ pub const TcpServer = struct {
         }
 
         // Select next quote
-        const quote_index = try self.selector.next();
-        const quote = self.store.get(quote_index) orelse {
+        const quote_index = self.selector.next();
+        const quote = (if (quote_index) |qi| self.store.get(qi) else null) orelse {
             // Quote index out of bounds (shouldn't happen)
             self.log.warn("tcp_invalid_quote_index", .{ .index = quote_index });
             return;
