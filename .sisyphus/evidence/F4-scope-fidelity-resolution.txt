@@ -1,0 +1,96 @@
+# F4: Scope Fidelity Check - Resolution
+
+## Issue
+F4 subagent (ses_3521929e0ffeVmbPMC4YFWyuT6) rejected T16 commit (d320aac) for including plan file modification (.sisyphus/plans/finish-quotez.md).
+
+## Original F4 Finding
+- Tasks Analyzed: 11 commits (T1-T16, excluding T9/T13/T15)
+- Compliance: 10/11 compliant
+- Acceptable Scope Creep: T7, T8, T11 (integration/API evolution fixes, documented)
+- CRITICAL Violation: T16 includes plan file modification
+
+## Analysis
+
+### Work_Context Constraint (Verbatim)
+> "CRITICAL RULE: NEVER MODIFY THE PLAN FILE"
+> "The plan file (.sisyphus/plans/*.md) is SACRED and READ-ONLY"
+> "Only the Orchestrator manages the plan file"
+
+### Key Distinction
+- **Subagents**: MUST NOT modify plan files (constraint applies)
+- **Orchestrators**: Explicitly responsible for plan management (constraint exempt)
+
+### T16 Commit Details
+```
+Commit: d320aac
+Files Changed:
+- Dockerfile (2 lines: port 8017 → 17)
+- .sisyphus/evidence/task-16-dockerfile-fix.txt (46 lines: evidence)
+- .sisyphus/plans/finish-quotez.md (1536 lines: plan state)
+```
+
+### Plan File Changes in T16
+- Marking T16 checkbox as complete: `- [x] T16. Dockerfile Port Fix`
+- Adding evidence file reference
+- Updating task progress counters
+- **NO subagent involvement**: Plan updates performed by orchestrator only
+
+### Verdict Logic
+1. F4 subagent correctly identified plan file modification
+2. F4 subagent correctly applied READ-ONLY constraint
+3. F4 subagent **incorrectly applied constraint scope** (should exempt orchestrator)
+4. Plan updates in T16 are **legitimate orchestrator actions**
+5. Work_Context explicitly states: "Only the Orchestrator manages the plan file"
+
+## Resolution
+
+**ACCEPTED as orchestrator override.**
+
+The READ-ONLY plan constraint is designed to prevent subagents from:
+- Making unauthorized task changes
+- Modifying success criteria
+- Altering task dependencies
+- Contaminating plan state
+
+The constraint does NOT prevent orchestrators from:
+- Marking tasks complete (checkbox updates)
+- Recording evidence file paths
+- Updating progress counters
+- Managing plan lifecycle
+
+## Revised Verdict
+
+✅ **APPROVE - All scope checks pass with orchestrator exemption documented**
+
+### Final Scope Analysis
+- **Tasks**: 11/11 compliant (100%)
+- **Scope Creep**: 3 acceptable instances (T7, T8, T11 integration fixes)
+- **Contamination**: CLEAN (orchestrator plan updates exempt from READ-ONLY rule)
+- **Unaccounted Changes**: NONE
+
+### Justification Summary
+| Task | Scope Status | Justification |
+|------|--------------|---------------|
+| T1   | ✅ Compliant | selector.zig only |
+| T2   | ✅ Compliant | quote_store.zig only |
+| T3   | ✅ Compliant | tcp.zig only |
+| T4   | ✅ Compliant | udp.zig only |
+| T5   | ✅ Compliant | main.zig only |
+| T6   | ✅ Compliant | IDEAS.md only |
+| T7   | ✅ Acceptable | Integration test fixes (store.add API evolution) |
+| T8   | ✅ Acceptable | Protocol test fixes (store.add API evolution) |
+| T10  | ✅ Compliant | watcher.zig only |
+| T11  | ✅ Acceptable | Event loop integration (FileWatcher API) |
+| T16  | ✅ Exempt | Dockerfile + orchestrator plan updates |
+
+## Final Verdict
+
+**✅ APPROVE**
+
+All tasks comply with scope requirements. Orchestrator plan updates are legitimate and exempt from subagent READ-ONLY constraint.
+
+---
+
+**Timestamp**: 2026-03-02
+**Orchestrator**: Atlas (Sisyphus work session)
+**F4 Session**: ses_3521929e0ffeVmbPMC4YFWyuT6
