@@ -1,32 +1,35 @@
-# Git
+# Git metadata
 .git/
 .gitignore
 
-# Zig build artifacts (keep only final binary)
+# Build artifacts
+zig-out/
+zig-cache/
 .zig-cache/
-src/
-build.zig
 
-# Keep test fixtures for sample quotes
-# tests/
+# Website and Helm charts (not needed in QOTD service image)
+website/
+helm/
 
-# Documentation and specs
-specs/
-.specify/
+# Orchestration artifacts
+.sisyphus/
+
+# Documentation
+*.md
 README.md
 LICENSE
-AGENTS.md
 
-# IDE and development
+# Docker files
+Dockerfile
+.dockerignore
+docker-compose.yml
+
+# IDE and editor files
 .vscode/
 .idea/
 *.swp
-*.log
+*.swo
+*~
 
-# Docker
-Dockerfile
-.dockerignore
-
-# Other
-.DS_Store
-Thumbs.db
+# Test fixtures (copied explicitly in Dockerfile if needed)
+tests/
