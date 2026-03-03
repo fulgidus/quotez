@@ -177,7 +177,7 @@ pub const UdpServer = struct {
         ) catch |err| {
             // UDP is best-effort, log and drop on error
             switch (err) {
-                error.MessageOversize => {
+                error.MessageTooBig => {
                     self.log.warn("udp_send_message_too_big", .{ .size = response.len });
                 },
                 error.NetworkUnreachable, error.UnreachableAddress => {

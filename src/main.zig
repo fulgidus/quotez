@@ -6,6 +6,7 @@ const selector = @import("selector.zig");
 const tcp_server = @import("servers/tcp.zig");
 const udp_server = @import("servers/udp.zig");
 const watcher = @import("watcher.zig");
+const http_server = @import("servers/http.zig");
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -120,6 +121,26 @@ pub fn main() !void {
     };
     defer udp.deinit();
 
+    // Initialize HTTP server (conditional on health_enabled)
+    var http_opt: ?http_server.HttpServer = null;
+    if (cfg.health_enabled) {
+        http_opt = http_server.HttpServer.init(
+            allocator,
+            cfg.host,
+            cfg.health_port,
+            &store,
+        ) catch |err| {
+            log.err("fatal", .{
+                .reason = "failed to start HTTP server",
+                .host = cfg.host,
+                .port = cfg.health_port,
+                .err = @errorName(err),
+            });
+            std.process.exit(1);
+        };
+    }
+    defer if (http_opt) |*http| http.deinit();
+
     log.info("service_ready", .{
         .tcp_port = cfg.tcp_port,
         .udp_port = cfg.udp_port,
@@ -139,7 +160,7 @@ pub fn main() !void {
     try setupSignalHandlers(&shutdown_requested);
 
     // Run event loop with poll() for both TCP and UDP
-    runEventLoop(&tcp, &udp, &file_watcher, &store, &sel, &cfg, &log, &shutdown_requested) catch |err| {
+    runEventLoop(&tcp, &udp, if (http_opt) |*http| http else null, &file_watcher, &store, &sel, &cfg, &log, &shutdown_requested) catch |err| {
         log.err("fatal", .{
             .reason = "event loop error",
             .err = @errorName(err),
@@ -176,7 +197,7 @@ fn setupSignalHandlers(shutdown_requested: *std.atomic.Value(bool)) !void {
 var shutdown_flag: ?*std.atomic.Value(bool) = null;
 
 /// Signal handler for SIGTERM and SIGINT
-fn handleShutdownSignal(_: std.posix.SIG) callconv(.c) void {
+fn handleShutdownSignal(_: c_int) callconv(.c) void {
     if (shutdown_flag) |flag| {
         flag.store(true, .seq_cst);
     }
@@ -186,6 +207,7 @@ fn handleShutdownSignal(_: std.posix.SIG) callconv(.c) void {
 fn runEventLoop(
     tcp: *tcp_server.TcpServer,
     udp: *udp_server.UdpServer,
+    http: ?*http_server.HttpServer,
     file_watcher: *watcher.FileWatcher,
     store: *quote_store.QuoteStore,
     sel: *selector.Selector,
@@ -196,26 +218,38 @@ fn runEventLoop(
     log.info("event_loop_started", .{
         .tcp_fd = tcp.socket,
         .udp_fd = udp.socket,
+        .http_fd = if (http) |h| h.socket else null,
     });
 
-    // Set up poll file descriptors
-    var poll_fds = [_]std.posix.pollfd{
-        .{
-            .fd = tcp.socket,
-            .events = std.posix.POLL.IN,
-            .revents = 0,
-        },
-        .{
-            .fd = udp.socket,
-            .events = std.posix.POLL.IN,
-            .revents = 0,
-        },
+    // Set up poll file descriptors (conditionally include HTTP)
+    const http_enabled = http != null;
+    const num_fds: usize = if (http_enabled) 3 else 2;
+    var poll_fds_array: [3]std.posix.pollfd = undefined;
+    
+    poll_fds_array[0] = .{
+        .fd = tcp.socket,
+        .events = std.posix.POLL.IN,
+        .revents = 0,
     };
+    poll_fds_array[1] = .{
+        .fd = udp.socket,
+        .events = std.posix.POLL.IN,
+        .revents = 0,
+    };
+    if (http_enabled) {
+        poll_fds_array[2] = .{
+            .fd = http.?.socket,
+            .events = std.posix.POLL.IN,
+            .revents = 0,
+        };
+    }
+    
+    const poll_fds = poll_fds_array[0..num_fds];
 
     // Event loop
     while (!shutdown_requested.load(.seq_cst)) {
         // Wait for events on either socket (timeout: 1000ms to check shutdown flag periodically)
-        const ready = std.posix.poll(&poll_fds, 1000) catch |err| {
+        const ready = std.posix.poll(poll_fds, 1000) catch |err| {
             // Interrupted by signal is expected during shutdown
             if (err == error.SignalInterrupt) {
                 if (shutdown_requested.load(.seq_cst)) {
@@ -251,6 +285,13 @@ fn runEventLoop(
                 log.warn("udp_serve_error", .{ .err = @errorName(err) });
             };
         }
+        
+        // Check HTTP socket (if enabled)
+        if (http_enabled and poll_fds[2].revents & std.posix.POLL.IN != 0) {
+            http.?.acceptAndServe() catch |err| {
+                log.warn("http_serve_error", .{ .err = @errorName(err) });
+            };
+        }
 
         // Check for errors
         if (poll_fds[0].revents & (std.posix.POLL.ERR | std.posix.POLL.HUP) != 0) {
@@ -261,10 +302,17 @@ fn runEventLoop(
             log.err("udp_socket_error", .{ .revents = poll_fds[1].revents });
             return error.UdpSocketError;
         }
+        if (http_enabled and poll_fds[2].revents & (std.posix.POLL.ERR | std.posix.POLL.HUP) != 0) {
+            log.err("http_socket_error", .{ .revents = poll_fds[2].revents });
+            return error.HttpSocketError;
+        }
 
         // Reset revents for next iteration
         poll_fds[0].revents = 0;
         poll_fds[1].revents = 0;
+        if (http_enabled) {
+            poll_fds[2].revents = 0;
+        }
     }
 }
 
@@ -276,3 +324,4 @@ pub const selector_mod = selector;
 pub const tcp_server_mod = tcp_server;
 pub const udp_server_mod = udp_server;
 pub const watcher_mod = watcher;
+pub const http_server_mod = http_server;
