@@ -18,7 +18,7 @@ pub fn main() !void {
     log.info("startup", .{ .service = "quotez", .version = "0.1.0" });
 
     // Parse CLI arguments for config file path
-    var args = try std.process.argsAlloc(allocator);
+    const args = try std.process.argsAlloc(allocator);
     defer std.process.argsFree(allocator, args);
 
     var config_path: []const u8 = "quotez.toml";
@@ -36,8 +36,7 @@ pub fn main() !void {
 
     // Handle help flag
     if (show_help) {
-        const stdout = std.io.getStdOut().writer();
-        try stdout.print("Usage: quotez [CONFIG_PATH]\n", .{});
+        std.debug.print("Usage: quotez [CONFIG_PATH]\n", .{});
         std.process.exit(0);
     }
 
