@@ -1,0 +1,135 @@
+.rich-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  position: relative;
+  padding: var(--spacing-xl);
+  overflow: hidden;
+}
+
+.rich-bg {
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle at center, var(--color-accent) 0%, transparent 50%);
+  opacity: 0.15;
+  z-index: -1;
+  animation: hue-shift 10s infinite linear;
+}
+
+@keyframes hue-shift {
+  0% { filter: hue-rotate(0deg); }
+  100% { filter: hue-rotate(360deg); }
+}
+
+.rich-card {
+  background-color: var(--color-surface);
+  border-radius: var(--radius);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  padding: var(--spacing-xl);
+  max-width: 800px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  border: 1px solid var(--color-border);
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+
+.rich-card.visible {
+  opacity: 1;
+}
+
+.rich-counter {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  margin-bottom: var(--spacing-md);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+
+.rich-quote-wrapper {
+  margin-bottom: var(--spacing-xl);
+  width: 100%;
+}
+
+.rich-quote {
+  font-size: 2rem;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--color-text);
+  margin-bottom: var(--spacing-md);
+  display: inline-block;
+  overflow: hidden;
+  white-space: nowrap;
+  border-right: 2px solid var(--color-accent);
+  width: 0;
+}
+
+.rich-quote.typing {
+  animation: typing 2s steps(40, end) forwards, blink 0.75s step-end infinite;
+}
+
+@keyframes typing {
+  from { width: 0; }
+  to { width: 100%; }
+}
+
+@keyframes blink {
+  from, to { border-color: transparent; }
+  50% { border-color: var(--color-accent); }
+}
+
+.rich-author {
+  font-size: 1.2rem;
+  color: var(--color-accent);
+  font-style: italic;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+
+.rich-author.visible {
+  opacity: 1;
+  transform: translateY(0);
+  transition-delay: 2s;
+}
+
+.rich-button {
+  background-color: var(--color-accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius);
+  padding: var(--spacing-md) var(--spacing-lg);
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color var(--transition), transform var(--transition);
+}
+
+.rich-button:hover:not(:disabled) {
+  background-color: var(--color-accent-hover);
+  transform: translateY(-2px);
+}
+
+.rich-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.rich-status, .rich-error {
+  font-size: 1.2rem;
+  color: var(--color-text-muted);
+  text-align: center;
+  padding: var(--spacing-xl);
+}
+
+.rich-error {
+  color: #ff6b6b;
+}
