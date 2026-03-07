@@ -61,8 +61,7 @@ pub const Configuration = struct {
     pub fn load(allocator: std.mem.Allocator, path: []const u8) !Configuration {
         var log = logger.Logger.init();
 
-        // Read configuration file using Zig 0.16 API
-        const content = std.Io.Dir.cwd().readFileAlloc(std.Options.debug_io, path, allocator, .limited(1024 * 1024)) catch |err| {
+        const content = std.fs.cwd().readFileAlloc(allocator, path, 1024 * 1024) catch |err| {
             log.err("config_error", .{ .reason = "failed to read file", .path = path });
             return err;
         };

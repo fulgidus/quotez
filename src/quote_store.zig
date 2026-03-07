@@ -18,7 +18,7 @@ pub const Quote = struct {
     pub fn init(allocator: std.mem.Allocator, content: []const u8, source_path: ?[]const u8) !Quote {
         // Normalize content: trim whitespace
         const normalized = std.mem.trim(u8, content, " \t\n\r");
-        
+
         // Validate: must not be empty
         if (normalized.len == 0) {
             return error.EmptyQuote;
@@ -33,9 +33,9 @@ pub const Quote = struct {
         const owned_content = try allocator.dupe(u8, normalized);
         errdefer allocator.free(owned_content);
 
-        const owned_path = if (source_path) |path| 
-            try allocator.dupe(u8, path) 
-        else 
+        const owned_path = if (source_path) |path|
+            try allocator.dupe(u8, path)
+        else
             null;
 
         return Quote{
@@ -99,7 +99,7 @@ pub const QuoteStore = struct {
 
         // Reset metadata
         self.metadata = .{};
-        
+
         // Hash map for deduplication
         var seen = std.AutoHashMap([32]u8, void).init(self.allocator);
         defer seen.deinit();
@@ -114,16 +114,11 @@ pub const QuoteStore = struct {
 
         // Update metadata
         self.metadata.unique_quotes = self.quotes.items.len;
-        // Update last rebuild timestamp using Instant in Zig 0.16
-        const instant = std.time.Instant.now() catch {
-            self.last_rebuild = 0;
-            return;
-        };
-        self.last_rebuild = instant.timestamp.sec;
+        self.last_rebuild = @divTrunc(std.time.milliTimestamp(), 1000);
 
         // Log results
         if (self.metadata.unique_quotes == 0) {
-            self.log.warn("empty_quote_store", .{ 
+            self.log.warn("empty_quote_store", .{
                 .directories = directories.len,
                 .files_parsed = self.metadata.total_files_parsed,
             });
@@ -160,17 +155,13 @@ pub const QuoteStore = struct {
                 self.log.warn("file_parse_failed", .{ .path = full_path, .err = @errorName(err) });
                 continue;
             };
-            
+
             self.metadata.total_files_parsed += 1;
         }
     }
 
     /// Parse a single quote file with format auto-detection
     fn parseQuoteFile(self: *QuoteStore, path: []const u8, seen: *std.AutoHashMap([32]u8, void)) !void {
-        const file = try std.fs.cwd().openFile(path, .{});
-        defer file.close();
-
-        // Read file using Zig 0.16 API (read via Dir instead of File)
         const content = try std.fs.cwd().readFileAlloc(self.allocator, path, 10 * 1024 * 1024); // 10MB max
         defer self.allocator.free(content);
 
@@ -188,11 +179,7 @@ pub const QuoteStore = struct {
 
         // Parse the file
         var parse_result = selected_parser.parse(self.allocator, content) catch |err| {
-            self.log.err("file_parse_error", .{ 
-                .path = path, 
-                .format = @tagName(format),
-                .err = @errorName(err) 
-            });
+            self.log.err("file_parse_error", .{ .path = path, .format = @tagName(format), .err = @errorName(err) });
             return err;
         };
         defer parse_result.deinit(self.allocator);
@@ -244,7 +231,7 @@ pub const QuoteStore = struct {
     pub fn add(self: *QuoteStore, content: []const u8) !void {
         // Create quote with hash
         const quote = try Quote.init(self.allocator, content, null);
-        
+
         // Check for duplicates using Blake3 hash
         var is_duplicate = false;
         for (self.quotes.items) |existing| {
@@ -253,7 +240,7 @@ pub const QuoteStore = struct {
                 break;
             }
         }
-        
+
         if (is_duplicate) {
             quote.deinit(self.allocator);
             self.metadata.duplicates_removed += 1;
@@ -273,7 +260,7 @@ pub const QuoteStore = struct {
 // Unit tests
 test "quote normalization and hashing" {
     const allocator = std.testing.allocator;
-    
+
     const q1 = try Quote.init(allocator, "  Hello World  \n", null);
     defer q1.deinit(allocator);
 
@@ -296,7 +283,7 @@ test "empty quote rejected" {
 
 test "quote store deduplication" {
     const allocator = std.testing.allocator;
-    
+
     var store = QuoteStore.init(allocator);
     defer store.deinit();
 
@@ -335,7 +322,7 @@ test "quote store deduplication" {
 
 test "quote store get and count" {
     const allocator = std.testing.allocator;
-    
+
     var store = QuoteStore.init(allocator);
     defer store.deinit();
 
@@ -358,7 +345,7 @@ test "quote store get and count" {
 
 test "quote store isEmpty" {
     const allocator = std.testing.allocator;
-    
+
     var store = QuoteStore.init(allocator);
     defer store.deinit();
 

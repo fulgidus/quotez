@@ -44,10 +44,8 @@ pub const Selector = struct {
 
     /// Initialize selector with given mode
     pub fn init(allocator: std.mem.Allocator, mode: SelectionMode, quote_count: usize) !Selector {
-        // Seed RNG with timestamp in Zig 0.16
         const instant = std.time.Instant.now() catch {
-            const seed: u64 = 12345; // fallback seed
-            return initWithSeed(allocator, mode, quote_count, seed);
+            return initWithSeed(allocator, mode, quote_count, 12345);
         };
         const seed = @as(u64, @intCast(instant.timestamp.sec * 1000 + @divTrunc(instant.timestamp.nsec, 1_000_000)));
 
@@ -208,7 +206,7 @@ pub const Selector = struct {
     /// Reset selector state (called after quote store rebuild)
     pub fn reset(self: *Selector, new_quote_count: usize) !void {
         self.quote_count = new_quote_count;
-        
+
         switch (self.state) {
             .random => {
                 // Random is stateless, nothing to reset

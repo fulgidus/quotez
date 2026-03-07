@@ -33,10 +33,7 @@ pub const Logger = struct {
         self.mutex.lock();
         defer self.mutex.unlock();
 
-        // Write timestamp, level, and event
-        // Use Instant.now() for Unix epoch time in Zig 0.16
         const instant = std.time.Instant.now() catch {
-            // If Instant.now() fails, use 0
             std.debug.print("[0] {s} {s}", .{ level.asString(), event });
             return;
         };
