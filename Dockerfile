@@ -12,23 +12,23 @@
 #     quotez:latest
 
 # ==============================================================================
-# Stage 1: Builder - Alpine + Zig 0.16.0
+# Stage 1: Builder - Alpine + Zig 0.16.0-dev.2682+02142a54d
 # ==============================================================================
 FROM alpine:latest AS builder
 
 # Install dependencies for Zig download and build
 RUN apk add --no-cache curl tar xz
 
-# Install Zig 0.16.0 (MANDATORY per AGENTS.md)
+# Install Zig 0.16.0-dev.2682+02142a54d (latest 0.16 build per AGENTS.md)
 ARG TARGETARCH
 RUN case "${TARGETARCH}" in \
       amd64) ZIG_ARCH="x86_64" ;; \
       arm64) ZIG_ARCH="aarch64" ;; \
       *) echo "Unsupported architecture: ${TARGETARCH}" && exit 1 ;; \
     esac && \
-    curl -fsSL "https://ziglang.org/download/0.16.0/zig-linux-${ZIG_ARCH}-0.16.0.tar.xz" -o zig.tar.xz && \
+    curl -fsSL "https://ziglang.org/builds/zig-${ZIG_ARCH}-linux-0.16.0-dev.2682+02142a54d.tar.xz" -o zig.tar.xz && \
     tar -xf zig.tar.xz && \
-    mv zig-linux-${ZIG_ARCH}-0.16.0 /opt/zig && \
+    mv zig-${ZIG_ARCH}-linux-0.16.0-dev.2682+02142a54d /opt/zig && \
     rm zig.tar.xz
 
 ENV PATH="/opt/zig:${PATH}"

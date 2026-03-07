@@ -62,7 +62,7 @@ pub const Configuration = struct {
         var log = logger.Logger.init();
 
         // Read configuration file using Zig 0.16 API
-        const content = std.fs.cwd().readFileAlloc(allocator, path, 1024 * 1024) catch |err| {
+        const content = std.Io.Dir.cwd().readFileAlloc(std.Options.debug_io, path, allocator, .limited(1024 * 1024)) catch |err| {
             log.err("config_error", .{ .reason = "failed to read file", .path = path });
             return err;
         };
@@ -218,7 +218,6 @@ const TomlParser = struct {
         if (self.health_port == null) {
             self.log.info("default_applied", .{ .field = "health.port", .value = 8080 });
         }
-            self.log.info("default_applied", .{ .field = "health.port", .value = 8080 });
 
         return config;
     }
@@ -503,7 +502,6 @@ test "configuration with comments" {
     try std.testing.expectEqual(SelectionMode.sequential, config.selection_mode);
 }
 
-
 test "health section parses correctly" {
     const allocator = std.testing.allocator;
     const content =
@@ -541,5 +539,3 @@ test "health section defaults apply when missing" {
     try std.testing.expectEqual(true, config.health_enabled);
     try std.testing.expectEqual(@as(u16, 8080), config.health_port);
 }
-
-

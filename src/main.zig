@@ -3,6 +3,7 @@ const config = @import("config.zig");
 const logger = @import("logger.zig");
 const quote_store = @import("quote_store.zig");
 const selector = @import("selector.zig");
+const net = @import("net.zig");
 const tcp_server = @import("servers/tcp.zig");
 const udp_server = @import("servers/udp.zig");
 const watcher = @import("watcher.zig");
@@ -151,7 +152,7 @@ pub fn main() !void {
     var file_watcher = try watcher.FileWatcher.init(
         allocator,
         cfg.directories,
-        @as(u64, cfg.polling_interval),  // Cast u32 to u64
+        @as(u64, cfg.polling_interval), // Cast u32 to u64
     );
     defer file_watcher.deinit();
 
@@ -225,7 +226,7 @@ fn runEventLoop(
     const http_enabled = http != null;
     const num_fds: usize = if (http_enabled) 3 else 2;
     var poll_fds_array: [3]std.posix.pollfd = undefined;
-    
+
     poll_fds_array[0] = .{
         .fd = tcp.socket,
         .events = std.posix.POLL.IN,
@@ -243,7 +244,7 @@ fn runEventLoop(
             .revents = 0,
         };
     }
-    
+
     const poll_fds = poll_fds_array[0..num_fds];
 
     // Event loop
@@ -285,7 +286,7 @@ fn runEventLoop(
                 log.warn("udp_serve_error", .{ .err = @errorName(err) });
             };
         }
-        
+
         // Check HTTP socket (if enabled)
         if (http_enabled and poll_fds[2].revents & std.posix.POLL.IN != 0) {
             http.?.acceptAndServe() catch |err| {
@@ -321,6 +322,7 @@ pub const config_mod = config;
 pub const logger_mod = logger;
 pub const quote_store_mod = quote_store;
 pub const selector_mod = selector;
+pub const net_mod = net;
 pub const tcp_server_mod = tcp_server;
 pub const udp_server_mod = udp_server;
 pub const watcher_mod = watcher;

@@ -16,7 +16,7 @@ A tiny Zig nanoservice implementing the Quote of the Day (RFC 865) protocol over
 
 ### Prerequisites
 
-- Zig 0.16.0 or later
+- Zig 0.16.0-dev.2682+02142a54d or later
 - Docker (optional, for container deployment)
 
 ### Build
