@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "qotd-service.fullname" . }}
+  labels:
+    {{- include "qotd-service.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "qotd-service.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: tcp-qotd
+      port: {{ .Values.service.tcpPort }}
+      targetPort: tcp-qotd
+      protocol: TCP
+    - name: udp-qotd
+      port: {{ .Values.service.udpPort }}
+      targetPort: udp-qotd
+      protocol: UDP
+    - name: http
+      port: {{ .Values.service.httpPort }}
+      targetPort: http
+      protocol: TCP

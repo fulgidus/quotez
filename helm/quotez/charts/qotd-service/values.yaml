@@ -9,13 +9,25 @@ image:
 
 service:
   type: ClusterIP
-  tcpPort: 17
-  udpPort: 17
+  tcpPort: 8017
+  udpPort: 8017
+  httpPort: 8080
 
-resources: {}
-  # requests:
-  #   cpu: 100m
-  #   memory: 128Mi
-  # limits:
-  #   cpu: 500m
-  #   memory: 512Mi
+resources:
+  requests:
+    cpu: 50m
+    memory: 32Mi
+  limits:
+    cpu: 200m
+    memory: 64Mi
+
+persistence:
+  size: 1Gi
+  storageClass: ""
+
+config:
+  mode: random
+  pollingInterval: 60
+  apiEnabled: true
+  apiUsername: admin
+  apiPassword: quotez

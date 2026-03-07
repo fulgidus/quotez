@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "qotd-service.fullname" . }}
+  labels:
+    {{- include "qotd-service.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "qotd-service.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "qotd-service.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: qotd-service
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy | default "IfNotPresent" }}
+          args:
+            - "/quotez.toml"
+          ports:
+            - name: tcp-qotd
+              containerPort: {{ .Values.service.tcpPort }}
+              protocol: TCP
+            - name: udp-qotd
+              containerPort: {{ .Values.service.udpPort }}
+              protocol: UDP
+            - name: http
+              containerPort: {{ .Values.service.httpPort }}
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.service.httpPort }}
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: {{ .Values.service.httpPort }}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /quotez.toml
+              subPath: quotez.toml
+            - name: data
+              mountPath: /data/quotes
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "qotd-service.fullname" . }}-config
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "qotd-service.fullname" . }}-data
