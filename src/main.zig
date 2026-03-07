@@ -146,6 +146,7 @@ pub fn main() !void {
             &sel,
             &file_watcher,
             startup_time,
+            cfg.api_quotes_path,
             &cfg,
         ) catch |err| {
             log.err("fatal", .{

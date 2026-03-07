@@ -48,6 +48,7 @@ pub const Configuration = struct {
     api_enabled: bool,
     api_username: []const u8,
     api_password: []const u8,
+    api_quotes_path: []const u8,
 
     // Allocator for owned strings
     allocator: std.mem.Allocator,
@@ -64,6 +65,7 @@ pub const Configuration = struct {
         pub const api_enabled: bool = true;
         pub const api_username: []const u8 = "admin";
         pub const api_password: []const u8 = "quotez";
+        pub const api_quotes_path: []const u8 = "/data/quotes/api-managed.json";
     };
     /// Load and parse configuration from file
     pub fn load(allocator: std.mem.Allocator, path: []const u8) !Configuration {
@@ -106,6 +108,7 @@ pub const Configuration = struct {
         self.allocator.free(self.host);
         self.allocator.free(self.api_username);
         self.allocator.free(self.api_password);
+        self.allocator.free(self.api_quotes_path);
     }
 };
 
@@ -129,6 +132,7 @@ const TomlParser = struct {
     api_enabled: ?bool = null,
     api_username: ?[]const u8 = null,
     api_password: ?[]const u8 = null,
+    api_quotes_path: ?[]const u8 = null,
 
     pub fn init(allocator: std.mem.Allocator, content: []const u8) TomlParser {
         return .{
@@ -154,6 +158,7 @@ const TomlParser = struct {
         // Free api strings if they were parsed but not transferred to Configuration
         if (self.api_username) |u| self.allocator.free(u);
         if (self.api_password) |p| self.allocator.free(p);
+        if (self.api_quotes_path) |path| self.allocator.free(path);
         // Note: host is transferred to Configuration, so Configuration.deinit() frees it
     }
 
@@ -188,6 +193,8 @@ const TomlParser = struct {
         errdefer self.allocator.free(api_username);
         const api_password = self.api_password orelse try self.allocator.dupe(u8, Configuration.Defaults.api_password);
         errdefer self.allocator.free(api_password);
+        const api_quotes_path = self.api_quotes_path orelse try self.allocator.dupe(u8, Configuration.Defaults.api_quotes_path);
+        errdefer self.allocator.free(api_quotes_path);
 
         const selection_mode = blk: {
             if (self.mode) |mode_str| {
@@ -222,12 +229,14 @@ const TomlParser = struct {
             .api_enabled = self.api_enabled orelse Configuration.Defaults.api_enabled,
             .api_username = api_username,
             .api_password = api_password,
+            .api_quotes_path = api_quotes_path,
         };
 
         // Null out transferred ownership so TomlParser.deinit() doesn't double-free
         self.host = null;
         self.api_username = null;
         self.api_password = null;
+        self.api_quotes_path = null;
 
         // Validate ranges
         if (config.tcp_port == 0 or config.udp_port == 0) {
@@ -356,6 +365,8 @@ const TomlParser = struct {
             self.api_username = try self.parseString();
         } else if (std.mem.eql(u8, key, "password")) {
             self.api_password = try self.parseString();
+        } else if (std.mem.eql(u8, key, "quotes_path")) {
+            self.api_quotes_path = try self.parseString();
         }
     }
 

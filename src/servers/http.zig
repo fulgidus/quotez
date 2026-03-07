@@ -20,6 +20,7 @@ pub const HttpServer = struct {
     watcher: *watcher_mod.FileWatcher,
     startup_time: std.time.Instant,
     maintenance_mode: bool,
+    api_quotes_path: []const u8,
     config_ref: *const config_mod.Configuration,
 
     /// Initialize and bind HTTP server
@@ -33,6 +34,7 @@ pub const HttpServer = struct {
         sel: *selector_mod.Selector,
         file_watcher: *watcher_mod.FileWatcher,
         startup: std.time.Instant,
+        api_quotes_path: []const u8,
         config: *const config_mod.Configuration,
     ) !HttpServer {
         var log = logger.Logger.init();
@@ -98,6 +100,7 @@ pub const HttpServer = struct {
             .watcher = file_watcher,
             .startup_time = startup,
             .maintenance_mode = false,
+            .api_quotes_path = api_quotes_path,
             .config_ref = config,
         };
     }
@@ -308,6 +311,13 @@ pub const HttpServer = struct {
                 return;
             };
 
+            self.writeApiQuotesFile() catch {
+                // Best effort rollback to keep API response consistent with persistence contract.
+                _ = self.store.removeQuote(self.store.count() - 1) catch {};
+                try self.sendErrorResponse(client_fd, 500, "Internal Server Error", "Failed to persist API quotes");
+                return;
+            };
+
             const new_id = self.store.count() - 1;
             var json_buf: std.ArrayList(u8) = .{};
             defer json_buf.deinit(self.allocator);
@@ -362,6 +372,11 @@ pub const HttpServer = struct {
                 return;
             };
 
+            self.writeApiQuotesFile() catch {
+                try self.sendErrorResponse(client_fd, 500, "Internal Server Error", "Failed to persist API quotes");
+                return;
+            };
+
             const new_id = self.store.count() - 1;
             var json_buf: std.ArrayList(u8) = .{};
             defer json_buf.deinit(self.allocator);
@@ -381,10 +396,46 @@ pub const HttpServer = struct {
                 try self.sendErrorResponse(client_fd, 500, "Internal Server Error", "Failed to delete quote");
                 return;
             };
+
+            self.writeApiQuotesFile() catch {
+                try self.sendErrorResponse(client_fd, 500, "Internal Server Error", "Failed to persist API quotes");
+                return;
+            };
+
             try self.sendJsonResponse(client_fd, 200, "OK", "{\"status\":\"ok\"}");
         } else {
             try self.sendErrorResponse(client_fd, 405, "Method Not Allowed", "Method Not Allowed");
         }
+    }
+
+    fn writeApiQuotesFile(self: *HttpServer) !void {
+        var json_buf: std.ArrayList(u8) = .{};
+        defer json_buf.deinit(self.allocator);
+
+        try json_buf.appendSlice(self.allocator, "{\"quotes\":[");
+        const count = self.store.count();
+        var emitted: usize = 0;
+        var i: usize = 0;
+        while (i < count) : (i += 1) {
+            const text = self.store.get(i) orelse continue;
+            if (emitted > 0) try json_buf.append(self.allocator, ',');
+            emitted += 1;
+
+            try json_buf.appendSlice(self.allocator, "{\"text\":\"");
+            try appendJsonEscaped(&json_buf, self.allocator, text);
+            try json_buf.appendSlice(self.allocator, "\"}");
+        }
+        try json_buf.appendSlice(self.allocator, "]}");
+
+        var write_buffer: [4096]u8 = undefined;
+        var atomic = try std.fs.cwd().atomicFile(self.api_quotes_path, .{
+            .make_path = true,
+            .write_buffer = &write_buffer,
+        });
+        defer atomic.deinit();
+
+        try atomic.file_writer.interface.writeAll(json_buf.items);
+        try atomic.finish();
     }
 
     /// Handle /api/status endpoint — GET only, requires auth
@@ -794,7 +845,7 @@ test "http server initialization" {
     defer store.deinit();
 
     // Try to bind to a high port (non-privileged)
-    var server = HttpServer.init(allocator, "127.0.0.1", 18080, &store, "admin", "quotez", undefined, undefined, undefined, undefined) catch |err| {
+    var server = HttpServer.init(allocator, "127.0.0.1", 18080, &store, "admin", "quotez", undefined, undefined, undefined, "api-managed.json", undefined) catch |err| {
         // May fail if port is in use, which is okay for testing
         if (err == error.AddressInUse) return error.SkipZigTest;
         return err;
@@ -882,6 +933,7 @@ test "checkAuth with valid credentials" {
         .watcher = undefined,
         .startup_time = undefined,
         .maintenance_mode = false,
+        .api_quotes_path = "api-managed.json",
         .config_ref = undefined,
     };
 
@@ -907,6 +959,7 @@ test "checkAuth with invalid credentials" {
         .watcher = undefined,
         .startup_time = undefined,
         .maintenance_mode = false,
+        .api_quotes_path = "api-managed.json",
         .config_ref = undefined,
     };
 
@@ -932,6 +985,7 @@ test "checkAuth with missing Authorization header" {
         .watcher = undefined,
         .startup_time = undefined,
         .maintenance_mode = false,
+        .api_quotes_path = "api-managed.json",
         .config_ref = undefined,
     };
 
@@ -973,7 +1027,7 @@ test "api quotes CRUD endpoint behavior" {
     defer store.deinit();
     try store.add("Initial quote");
 
-    var server = HttpServer.init(allocator, "127.0.0.1", 18081, &store, "admin", "quotez", undefined, undefined, undefined, undefined) catch |err| {
+    var server = HttpServer.init(allocator, "127.0.0.1", 18081, &store, "admin", "quotez", undefined, undefined, undefined, "api-managed.json", undefined) catch |err| {
         if (err == error.AddressInUse) return error.SkipZigTest;
         return err;
     };
