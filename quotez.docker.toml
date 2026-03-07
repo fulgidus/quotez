@@ -13,3 +13,8 @@ interval_seconds = 60
 [health]
 enabled = true
 port = 8080
+
+[api]
+enabled = true
+username = "admin"
+password = "quotez"

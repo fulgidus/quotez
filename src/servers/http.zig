@@ -179,16 +179,25 @@ pub const HttpServer = struct {
         } else if (std.mem.eql(u8, path, "/ready")) {
             try self.handleReady(client_fd, method);
         } else if (std.mem.startsWith(u8, path, "/api/")) {
-            _ = request_body; // available for future API route handlers
             // Auth required for all /api/ routes
             if (!self.checkAuth(request)) {
                 try self.sendUnauthorized(client_fd);
                 return;
             }
-            // No API routes implemented yet — auth passed, return 404
-            try self.sendErrorResponse(client_fd, 404, "Not Found", "Not Found");
+            // Route to API handlers
+            if (std.mem.eql(u8, path, "/api/quotes")) {
+                try self.handleQuotes(client_fd, method, request_body);
+            } else if (std.mem.startsWith(u8, path, "/api/quotes/")) {
+                const id_str = path["/api/quotes/".len..];
+                const id = std.fmt.parseInt(usize, id_str, 10) catch {
+                    try self.sendErrorResponse(client_fd, 400, "Bad Request", "Invalid quote ID");
+                    return;
+                };
+                try self.handleQuoteById(client_fd, method, id, request_body);
+            } else {
+                try self.sendErrorResponse(client_fd, 404, "Not Found", "Not Found");
+            }
         } else {
-            _ = request_body; // available for future route handlers
             try self.sendErrorResponse(client_fd, 404, "Not Found", "Not Found");
         }
     }
@@ -221,6 +230,135 @@ pub const HttpServer = struct {
             var body_buf: [256]u8 = undefined;
             const body = try std.fmt.bufPrint(&body_buf, "{{\"status\":\"ready\",\"quotes\":{d}}}", .{quote_count});
             try self.sendResponse(client_fd, 200, "OK", "application/json", body);
+        }
+    }
+
+    /// Handle /api/quotes endpoint — GET list, POST create
+    fn handleQuotes(self: *HttpServer, client_fd: std.posix.socket_t, method: []const u8, body: []const u8) !void {
+        if (std.mem.eql(u8, method, "GET")) {
+            var json_buf: std.ArrayList(u8) = .{};
+            defer json_buf.deinit(self.allocator);
+
+            try json_buf.appendSlice(self.allocator, "{\"quotes\":[");
+            const count = self.store.count();
+            var i: usize = 0;
+            while (i < count) : (i += 1) {
+                if (i > 0) try json_buf.append(self.allocator, ',');
+                const text = self.store.get(i) orelse continue;
+
+                try json_buf.appendSlice(self.allocator, "{\"id\":");
+                var id_buf: [32]u8 = undefined;
+                const id_str = try std.fmt.bufPrint(&id_buf, "{d}", .{i});
+                try json_buf.appendSlice(self.allocator, id_str);
+                try json_buf.appendSlice(self.allocator, ",\"text\":\"");
+                try appendJsonEscaped(&json_buf, self.allocator, text);
+                try json_buf.appendSlice(self.allocator, "\"}");
+            }
+            var count_buf: [32]u8 = undefined;
+            const count_str = try std.fmt.bufPrint(&count_buf, "],\"count\":{d}}}", .{count});
+            try json_buf.appendSlice(self.allocator, count_str);
+
+            try self.sendJsonResponse(client_fd, 200, "OK", json_buf.items);
+        } else if (std.mem.eql(u8, method, "POST")) {
+            const text = extractTextField(body) catch {
+                try self.sendErrorResponse(client_fd, 400, "Bad Request", "Invalid JSON body");
+                return;
+            };
+            if (text.len == 0) {
+                try self.sendErrorResponse(client_fd, 400, "Bad Request", "Quote text cannot be empty");
+                return;
+            }
+
+            const count = self.store.count();
+            var i: usize = 0;
+            while (i < count) : (i += 1) {
+                if (std.mem.eql(u8, self.store.get(i) orelse "", text)) {
+                    try self.sendErrorResponse(client_fd, 409, "Conflict", "Duplicate quote");
+                    return;
+                }
+            }
+
+            self.store.add(text) catch {
+                try self.sendErrorResponse(client_fd, 500, "Internal Server Error", "Failed to add quote");
+                return;
+            };
+
+            const new_id = self.store.count() - 1;
+            var json_buf: std.ArrayList(u8) = .{};
+            defer json_buf.deinit(self.allocator);
+            var id_buf: [32]u8 = undefined;
+            const id_prefix = try std.fmt.bufPrint(&id_buf, "{{\"id\":{d},\"text\":\"", .{new_id});
+            try json_buf.appendSlice(self.allocator, id_prefix);
+            try appendJsonEscaped(&json_buf, self.allocator, text);
+            try json_buf.appendSlice(self.allocator, "\"}");
+            try self.sendJsonResponse(client_fd, 201, "Created", json_buf.items);
+        } else {
+            try self.sendErrorResponse(client_fd, 405, "Method Not Allowed", "Method Not Allowed");
+        }
+    }
+
+    /// Handle /api/quotes/:id endpoint — GET by id, PUT update, DELETE remove
+    fn handleQuoteById(self: *HttpServer, client_fd: std.posix.socket_t, method: []const u8, id: usize, body: []const u8) !void {
+        if (std.mem.eql(u8, method, "GET")) {
+            const text = self.store.get(id) orelse {
+                try self.sendErrorResponse(client_fd, 404, "Not Found", "Quote not found");
+                return;
+            };
+
+            var json_buf: std.ArrayList(u8) = .{};
+            defer json_buf.deinit(self.allocator);
+            var id_buf: [32]u8 = undefined;
+            const id_prefix = try std.fmt.bufPrint(&id_buf, "{{\"id\":{d},\"text\":\"", .{id});
+            try json_buf.appendSlice(self.allocator, id_prefix);
+            try appendJsonEscaped(&json_buf, self.allocator, text);
+            try json_buf.appendSlice(self.allocator, "\"}");
+            try self.sendJsonResponse(client_fd, 200, "OK", json_buf.items);
+        } else if (std.mem.eql(u8, method, "PUT")) {
+            if (self.store.get(id) == null) {
+                try self.sendErrorResponse(client_fd, 404, "Not Found", "Quote not found");
+                return;
+            }
+
+            const text = extractTextField(body) catch {
+                try self.sendErrorResponse(client_fd, 400, "Bad Request", "Invalid JSON body");
+                return;
+            };
+            if (text.len == 0) {
+                try self.sendErrorResponse(client_fd, 400, "Bad Request", "Quote text cannot be empty");
+                return;
+            }
+
+            self.store.removeQuote(id) catch {
+                try self.sendErrorResponse(client_fd, 500, "Internal Server Error", "Failed to update quote");
+                return;
+            };
+            self.store.add(text) catch {
+                try self.sendErrorResponse(client_fd, 500, "Internal Server Error", "Failed to add updated quote");
+                return;
+            };
+
+            const new_id = self.store.count() - 1;
+            var json_buf: std.ArrayList(u8) = .{};
+            defer json_buf.deinit(self.allocator);
+            var id_buf: [32]u8 = undefined;
+            const id_prefix = try std.fmt.bufPrint(&id_buf, "{{\"id\":{d},\"text\":\"", .{new_id});
+            try json_buf.appendSlice(self.allocator, id_prefix);
+            try appendJsonEscaped(&json_buf, self.allocator, text);
+            try json_buf.appendSlice(self.allocator, "\"}");
+            try self.sendJsonResponse(client_fd, 200, "OK", json_buf.items);
+        } else if (std.mem.eql(u8, method, "DELETE")) {
+            if (self.store.get(id) == null) {
+                try self.sendErrorResponse(client_fd, 404, "Not Found", "Quote not found");
+                return;
+            }
+
+            self.store.removeQuote(id) catch {
+                try self.sendErrorResponse(client_fd, 500, "Internal Server Error", "Failed to delete quote");
+                return;
+            };
+            try self.sendJsonResponse(client_fd, 200, "OK", "{\"status\":\"ok\"}");
+        } else {
+            try self.sendErrorResponse(client_fd, 405, "Method Not Allowed", "Method Not Allowed");
         }
     }
 
@@ -375,6 +513,69 @@ pub const HttpServer = struct {
     }
 };
 
+/// Extract "text" field from JSON body like {"text":"..."}
+/// Returns the text value (not allocated — points into body slice)
+fn extractTextField(body: []const u8) ![]const u8 {
+    const key = "\"text\":\"";
+    const start_pos = std.mem.indexOf(u8, body, key) orelse return error.MissingTextField;
+    const value_start = start_pos + key.len;
+
+    var i = value_start;
+    while (i < body.len) {
+        if (body[i] == '\\') {
+            i += 2;
+            continue;
+        }
+        if (body[i] == '"') break;
+        i += 1;
+    }
+    if (i >= body.len) return error.MalformedJson;
+
+    const text = body[value_start..i];
+    return std.mem.trim(u8, text, " \t\n\r");
+}
+
+/// Append a string to an ArrayList with JSON escaping
+fn appendJsonEscaped(buf: *std.ArrayList(u8), allocator: std.mem.Allocator, s: []const u8) !void {
+    for (s) |c| {
+        switch (c) {
+            '"' => try buf.appendSlice(allocator, "\\\""),
+            '\\' => try buf.appendSlice(allocator, "\\\\"),
+            '\n' => try buf.appendSlice(allocator, "\\n"),
+            '\r' => try buf.appendSlice(allocator, "\\r"),
+            '\t' => try buf.appendSlice(allocator, "\\t"),
+            else => try buf.append(allocator, c),
+        }
+    }
+}
+
+fn testSendHttpRequestOnce(server: *HttpServer, port: u16, request: []const u8, response_buf: []u8) ![]const u8 {
+    const client_fd = try posix_net.socket(
+        std.posix.AF.INET,
+        std.posix.SOCK.STREAM,
+        std.posix.IPPROTO.TCP,
+    );
+    defer posix_net.close(client_fd);
+
+    const parsed_bytes = try net.parseIpv4("127.0.0.1");
+    const addr = std.posix.sockaddr.in{
+        .family = std.posix.AF.INET,
+        .port = std.mem.nativeToBig(u16, port),
+        .addr = parsed_bytes,
+    };
+
+    try posix_net.connect(client_fd, @ptrCast(&addr), @sizeOf(std.posix.sockaddr.in));
+    _ = try posix_net.send(client_fd, request, 0);
+    try server.acceptAndServe();
+    const n = try posix_net.recv(client_fd, response_buf, 0);
+    return response_buf[0..n];
+}
+
+fn testResponseBody(response: []const u8) []const u8 {
+    const sep = std.mem.indexOf(u8, response, "\r\n\r\n") orelse return "";
+    return response[sep + 4 ..];
+}
+
 // Tests
 test "http server initialization" {
     const allocator = std.testing.allocator;
@@ -511,4 +712,146 @@ test "checkAuth with missing Authorization header" {
 
     const request = "GET /api/quotes HTTP/1.1\r\nHost: localhost\r\n\r\n";
     try std.testing.expect(!server.checkAuth(request));
+}
+
+test "extractTextField parses valid body" {
+    const body = "{\"text\":\"Hello world\"}";
+    const text = try extractTextField(body);
+    try std.testing.expectEqualStrings("Hello world", text);
+}
+
+test "extractTextField handles escaped quotes" {
+    const body = "{\"text\":\"Hello \\\"quoted\\\" world\"}";
+    const text = try extractTextField(body);
+    try std.testing.expectEqualStrings("Hello \\\"quoted\\\" world", text);
+}
+
+test "extractTextField rejects malformed bodies" {
+    try std.testing.expectError(error.MissingTextField, extractTextField("{\"message\":\"x\"}"));
+    try std.testing.expectError(error.MalformedJson, extractTextField("{\"text\":\"unterminated}"));
+}
+
+test "appendJsonEscaped escapes special characters" {
+    const allocator = std.testing.allocator;
+    var buf: std.ArrayList(u8) = .{};
+    defer buf.deinit(allocator);
+
+    try appendJsonEscaped(&buf, allocator, "a\"b\\c\nd\re\tf");
+    try std.testing.expectEqualStrings("a\\\"b\\\\c\\nd\\re\\tf", buf.items);
+}
+
+test "api quotes CRUD endpoint behavior" {
+    const allocator = std.testing.allocator;
+    const auth_header = "Authorization: Basic YWRtaW46cXVvdGV6\r\n";
+
+    var store = quote_store.QuoteStore.init(allocator);
+    defer store.deinit();
+    try store.add("Initial quote");
+
+    var server = HttpServer.init(allocator, "127.0.0.1", 18081, &store, "admin", "quotez") catch |err| {
+        if (err == error.AddressInUse) return error.SkipZigTest;
+        return err;
+    };
+    defer server.deinit();
+
+    var response_storage: [8192]u8 = undefined;
+
+    // Unauthorized request
+    const no_auth_req =
+        "GET /api/quotes HTTP/1.1\r\n" ++
+        "Host: localhost\r\n" ++
+        "\r\n";
+    const no_auth_resp = try testSendHttpRequestOnce(&server, 18081, no_auth_req, &response_storage);
+    try std.testing.expect(std.mem.indexOf(u8, no_auth_resp, "401 Unauthorized") != null);
+
+    // GET /api/quotes
+    const get_all_req =
+        "GET /api/quotes HTTP/1.1\r\n" ++
+        "Host: localhost\r\n" ++
+        auth_header ++
+        "\r\n";
+    const get_all_resp = try testSendHttpRequestOnce(&server, 18081, get_all_req, &response_storage);
+    try std.testing.expect(std.mem.indexOf(u8, get_all_resp, "200 OK") != null);
+    const get_all_body = testResponseBody(get_all_resp);
+    try std.testing.expect(std.mem.indexOf(u8, get_all_body, "\"count\":1") != null);
+    try std.testing.expect(std.mem.indexOf(u8, get_all_body, "\"id\":0") != null);
+
+    // POST empty text -> 400
+    const post_empty_req =
+        "POST /api/quotes HTTP/1.1\r\n" ++
+        "Host: localhost\r\n" ++
+        auth_header ++
+        "Content-Type: application/json\r\n" ++
+        "Content-Length: 14\r\n" ++
+        "\r\n" ++
+        "{\"text\":\"\"}";
+    const post_empty_resp = try testSendHttpRequestOnce(&server, 18081, post_empty_req, &response_storage);
+    try std.testing.expect(std.mem.indexOf(u8, post_empty_resp, "400 Bad Request") != null);
+
+    // POST duplicate -> 409
+    const post_dup_req =
+        "POST /api/quotes HTTP/1.1\r\n" ++
+        "Host: localhost\r\n" ++
+        auth_header ++
+        "Content-Type: application/json\r\n" ++
+        "Content-Length: 24\r\n" ++
+        "\r\n" ++
+        "{\"text\":\"Initial quote\"}";
+    const post_dup_resp = try testSendHttpRequestOnce(&server, 18081, post_dup_req, &response_storage);
+    try std.testing.expect(std.mem.indexOf(u8, post_dup_resp, "409 Conflict") != null);
+
+    // POST create -> 201
+    const post_create_req =
+        "POST /api/quotes HTTP/1.1\r\n" ++
+        "Host: localhost\r\n" ++
+        auth_header ++
+        "Content-Type: application/json\r\n" ++
+        "Content-Length: 26\r\n" ++
+        "\r\n" ++
+        "{\"text\":\"Created via API\"}";
+    const post_create_resp = try testSendHttpRequestOnce(&server, 18081, post_create_req, &response_storage);
+    try std.testing.expect(std.mem.indexOf(u8, post_create_resp, "201 Created") != null);
+    try std.testing.expect(std.mem.indexOf(u8, testResponseBody(post_create_resp), "\"id\":1") != null);
+
+    // GET /api/quotes/1 -> 200
+    const get_one_req =
+        "GET /api/quotes/1 HTTP/1.1\r\n" ++
+        "Host: localhost\r\n" ++
+        auth_header ++
+        "\r\n";
+    const get_one_resp = try testSendHttpRequestOnce(&server, 18081, get_one_req, &response_storage);
+    try std.testing.expect(std.mem.indexOf(u8, get_one_resp, "200 OK") != null);
+    try std.testing.expect(std.mem.indexOf(u8, testResponseBody(get_one_resp), "Created via API") != null);
+
+    // PUT /api/quotes/1 -> 200
+    const put_req =
+        "PUT /api/quotes/1 HTTP/1.1\r\n" ++
+        "Host: localhost\r\n" ++
+        auth_header ++
+        "Content-Type: application/json\r\n" ++
+        "Content-Length: 23\r\n" ++
+        "\r\n" ++
+        "{\"text\":\"Updated quote\"}";
+    const put_resp = try testSendHttpRequestOnce(&server, 18081, put_req, &response_storage);
+    try std.testing.expect(std.mem.indexOf(u8, put_resp, "200 OK") != null);
+    try std.testing.expect(std.mem.indexOf(u8, testResponseBody(put_resp), "Updated quote") != null);
+
+    // DELETE /api/quotes/1 -> 200
+    const delete_req =
+        "DELETE /api/quotes/1 HTTP/1.1\r\n" ++
+        "Host: localhost\r\n" ++
+        auth_header ++
+        "\r\n";
+    const delete_resp = try testSendHttpRequestOnce(&server, 18081, delete_req, &response_storage);
+    try std.testing.expect(std.mem.indexOf(u8, delete_resp, "200 OK") != null);
+    try std.testing.expect(std.mem.indexOf(u8, testResponseBody(delete_resp), "\"status\":\"ok\"") != null);
+
+    // GET deleted id -> 404
+    const get_deleted_req =
+        "GET /api/quotes/1 HTTP/1.1\r\n" ++
+        "Host: localhost\r\n" ++
+        auth_header ++
+        "\r\n";
+    const get_deleted_resp = try testSendHttpRequestOnce(&server, 18081, get_deleted_req, &response_storage);
+    try std.testing.expect(std.mem.indexOf(u8, get_deleted_resp, "404 Not Found") != null);
 }

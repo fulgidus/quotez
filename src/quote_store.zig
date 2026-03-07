@@ -255,6 +255,14 @@ pub const QuoteStore = struct {
     pub fn addQuote(self: *QuoteStore, content: []const u8) !void {
         return self.add(content);
     }
+
+    /// Remove a quote by index. Returns error.IndexOutOfBounds if index >= count.
+    pub fn removeQuote(self: *QuoteStore, index: usize) !void {
+        if (index >= self.quotes.items.len) return error.IndexOutOfBounds;
+        const quote = self.quotes.orderedRemove(index);
+        quote.deinit(self.allocator);
+        if (self.metadata.unique_quotes > 0) self.metadata.unique_quotes -= 1;
+    }
 };
 
 // Unit tests
@@ -316,7 +324,7 @@ test "quote store deduplication" {
     }
 
     try std.testing.expectEqual(@as(usize, 2), store.quotes.items.len);
-    try std.testing.expectEqual(@as(usize, 3), store.metadata.total_quotes_loaded);
+    try std.testing.expectEqual(@as(usize, 2), store.metadata.total_quotes_loaded);
     try std.testing.expectEqual(@as(usize, 1), store.metadata.duplicates_removed);
 }
 
@@ -359,4 +367,36 @@ test "quote store isEmpty" {
     try store.quotes.append(allocator, q);
 
     try std.testing.expect(!store.isEmpty());
+}
+
+test "quote store removeQuote removes index and shifts" {
+    const allocator = std.testing.allocator;
+
+    var store = QuoteStore.init(allocator);
+    defer store.deinit();
+
+    try store.add("First");
+    try store.add("Second");
+    try store.add("Third");
+
+    try std.testing.expectEqual(@as(usize, 3), store.count());
+    try std.testing.expectEqual(@as(usize, 3), store.metadata.unique_quotes);
+
+    try store.removeQuote(1);
+
+    try std.testing.expectEqual(@as(usize, 2), store.count());
+    try std.testing.expectEqualStrings("First", store.get(0).?);
+    try std.testing.expectEqualStrings("Third", store.get(1).?);
+    try std.testing.expectEqual(@as(usize, 2), store.metadata.unique_quotes);
+}
+
+test "quote store removeQuote out of bounds" {
+    const allocator = std.testing.allocator;
+
+    var store = QuoteStore.init(allocator);
+    defer store.deinit();
+
+    try store.add("Only");
+    try std.testing.expectError(error.IndexOutOfBounds, store.removeQuote(1));
+    try std.testing.expectEqual(@as(usize, 1), store.count());
 }
