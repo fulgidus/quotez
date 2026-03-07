@@ -11,6 +11,8 @@ pub const HttpServer = struct {
     store: *quote_store.QuoteStore,
     log: logger.Logger,
     allocator: std.mem.Allocator,
+    auth_username: []const u8,
+    auth_password: []const u8,
 
     /// Initialize and bind HTTP server
     pub fn init(
@@ -18,6 +20,8 @@ pub const HttpServer = struct {
         host: []const u8,
         port: u16,
         store: *quote_store.QuoteStore,
+        auth_username: []const u8,
+        auth_password: []const u8,
     ) !HttpServer {
         var log = logger.Logger.init();
 
@@ -76,6 +80,8 @@ pub const HttpServer = struct {
             .store = store,
             .log = log,
             .allocator = allocator,
+            .auth_username = auth_username,
+            .auth_password = auth_password,
         };
     }
 
@@ -109,8 +115,8 @@ pub const HttpServer = struct {
         };
         defer posix_net.close(client_fd);
 
-        // Read HTTP request
-        var buf: [4096]u8 = undefined;
+        // Read HTTP request (up to 64KB)
+        var buf: [65536]u8 = undefined;
         const n = posix_net.recv(client_fd, &buf, 0) catch |err| {
             switch (err) {
                 error.ConnectionResetByPeer => {
@@ -130,6 +136,14 @@ pub const HttpServer = struct {
         }
 
         const request = buf[0..n];
+
+        // Reject bodies larger than 64KB
+        if (HttpServer.parseContentLength(request)) |content_length| {
+            if (content_length > 65536) {
+                try self.sendErrorResponse(client_fd, 413, "Content Too Large", "Request body too large");
+                return;
+            }
+        }
 
         // Parse HTTP request: extract method and path
         var lines = std.mem.splitScalar(u8, request, '\n');
@@ -152,32 +166,50 @@ pub const HttpServer = struct {
         // Trim trailing \r from path if present
         const path = std.mem.trimRight(u8, path_raw, "\r");
 
-        // Log health check at debug level (not info - too noisy from K8s probes)
-        self.log.debug("health_check", .{ .method = method, .path = path });
+        // Extract body (available for route handlers that need it)
+        const body_info = HttpServer.findBody(request);
+        const request_body = body_info.body;
 
-        // Route to handlers
-        if (!std.mem.eql(u8, method, "GET")) {
-            self.sendResponse(client_fd, 405, "Method Not Allowed", "text/plain", "Method Not Allowed") catch {};
-            return;
-        }
+        // Log request at debug level (not info - too noisy from K8s probes)
+        self.log.debug("http_request", .{ .method = method, .path = path });
 
+        // Route to handlers — method checking is done per handler
         if (std.mem.eql(u8, path, "/health")) {
-            try self.handleHealth(client_fd);
+            try self.handleHealth(client_fd, method);
         } else if (std.mem.eql(u8, path, "/ready")) {
-            try self.handleReady(client_fd);
+            try self.handleReady(client_fd, method);
+        } else if (std.mem.startsWith(u8, path, "/api/")) {
+            _ = request_body; // available for future API route handlers
+            // Auth required for all /api/ routes
+            if (!self.checkAuth(request)) {
+                try self.sendUnauthorized(client_fd);
+                return;
+            }
+            // No API routes implemented yet — auth passed, return 404
+            try self.sendErrorResponse(client_fd, 404, "Not Found", "Not Found");
         } else {
-            try self.sendResponse(client_fd, 404, "Not Found", "text/plain", "Not Found");
+            _ = request_body; // available for future route handlers
+            try self.sendErrorResponse(client_fd, 404, "Not Found", "Not Found");
         }
     }
 
-    /// Handle /health endpoint
-    fn handleHealth(self: *HttpServer, client_fd: std.posix.socket_t) !void {
+    /// Handle /health endpoint — GET only
+    fn handleHealth(self: *HttpServer, client_fd: std.posix.socket_t, method: []const u8) !void {
+        if (!std.mem.eql(u8, method, "GET")) {
+            try self.sendErrorResponse(client_fd, 405, "Method Not Allowed", "Method Not Allowed");
+            return;
+        }
         const body = "{\"status\":\"ok\"}";
         try self.sendResponse(client_fd, 200, "OK", "application/json", body);
     }
 
-    /// Handle /ready endpoint
-    fn handleReady(self: *HttpServer, client_fd: std.posix.socket_t) !void {
+    /// Handle /ready endpoint — GET only
+    fn handleReady(self: *HttpServer, client_fd: std.posix.socket_t, method: []const u8) !void {
+        if (!std.mem.eql(u8, method, "GET")) {
+            try self.sendErrorResponse(client_fd, 405, "Method Not Allowed", "Method Not Allowed");
+            return;
+        }
+
         const quote_count = self.store.count();
 
         if (quote_count == 0) {
@@ -190,6 +222,123 @@ pub const HttpServer = struct {
             const body = try std.fmt.bufPrint(&body_buf, "{{\"status\":\"ready\",\"quotes\":{d}}}", .{quote_count});
             try self.sendResponse(client_fd, 200, "OK", "application/json", body);
         }
+    }
+
+    /// Send a JSON response with the given status and body
+    fn sendJsonResponse(
+        self: *HttpServer,
+        client_fd: std.posix.socket_t,
+        status_code: u16,
+        status_text: []const u8,
+        body: []const u8,
+    ) !void {
+        try self.sendResponse(client_fd, status_code, status_text, "application/json", body);
+    }
+
+    /// Send a JSON error response: {"error":"<msg>","code":<status>}
+    fn sendErrorResponse(
+        self: *HttpServer,
+        client_fd: std.posix.socket_t,
+        status_code: u16,
+        status_text: []const u8,
+        error_message: []const u8,
+    ) !void {
+        var body_buf: [512]u8 = undefined;
+        const body = try std.fmt.bufPrint(
+            &body_buf,
+            "{{\"error\":\"{s}\",\"code\":{d}}}",
+            .{ error_message, status_code },
+        );
+        try self.sendResponse(client_fd, status_code, status_text, "application/json", body);
+    }
+
+    /// Find the body portion of an HTTP request (after \r\n\r\n separator)
+    fn findBody(request: []const u8) struct { headers_end: usize, body: []const u8 } {
+        if (std.mem.indexOf(u8, request, "\r\n\r\n")) |pos| {
+            return .{ .headers_end = pos + 4, .body = request[pos + 4 ..] };
+        }
+        return .{ .headers_end = request.len, .body = "" };
+    }
+
+    /// Parse the Content-Length header value from the headers portion of a request.
+    /// Returns null if the header is absent or the value is not a valid integer.
+    fn parseContentLength(request: []const u8) ?usize {
+        // Only scan the headers section (before \r\n\r\n)
+        const headers_end = if (std.mem.indexOf(u8, request, "\r\n\r\n")) |pos| pos else request.len;
+        const headers = request[0..headers_end];
+
+        // Try standard title-case form first (most common)
+        const needle = "Content-Length: ";
+        if (std.mem.indexOf(u8, headers, needle)) |idx| {
+            const value_start = idx + needle.len;
+            var value_end = value_start;
+            while (value_end < headers.len and headers[value_end] != '\r' and headers[value_end] != '\n') {
+                value_end += 1;
+            }
+            return std.fmt.parseInt(usize, headers[value_start..value_end], 10) catch null;
+        }
+
+        // Fallback: lowercase form (some clients send this)
+        const needle_lower = "content-length: ";
+        if (std.mem.indexOf(u8, headers, needle_lower)) |idx| {
+            const value_start = idx + needle_lower.len;
+            var value_end = value_start;
+            while (value_end < headers.len and headers[value_end] != '\r' and headers[value_end] != '\n') {
+                value_end += 1;
+            }
+            return std.fmt.parseInt(usize, headers[value_start..value_end], 10) catch null;
+        }
+
+        return null;
+    }
+
+    /// Check Basic Auth credentials from raw request bytes.
+    /// Returns true if credentials match self.auth_username / self.auth_password.
+    fn checkAuth(self: *HttpServer, request: []const u8) bool {
+        const auth_prefix = "Authorization: Basic ";
+        const auth_pos = std.mem.indexOf(u8, request, auth_prefix) orelse return false;
+        const token_start = auth_pos + auth_prefix.len;
+
+        // Find end of token (at \r or \n)
+        var token_end = token_start;
+        while (token_end < request.len and
+            request[token_end] != '\r' and
+            request[token_end] != '\n')
+        {
+            token_end += 1;
+        }
+        if (token_end == token_start) return false;
+        const encoded = request[token_start..token_end];
+
+        // Decode base64
+        var decoded_buf: [256]u8 = undefined;
+        const dec = std.base64.standard.Decoder;
+        const decoded_len = dec.calcSizeForSlice(encoded) catch return false;
+        if (decoded_len > decoded_buf.len) return false;
+        dec.decode(decoded_buf[0..decoded_len], encoded) catch return false;
+        const decoded = decoded_buf[0..decoded_len];
+
+        // Split on ':' to get username:password
+        const colon_pos = std.mem.indexOfScalar(u8, decoded, ':') orelse return false;
+        const username = decoded[0..colon_pos];
+        const password = decoded[colon_pos + 1 ..];
+
+        // Constant-time-ish comparison (both must match)
+        return std.mem.eql(u8, username, self.auth_username) and
+            std.mem.eql(u8, password, self.auth_password);
+    }
+
+    /// Send 401 Unauthorized with WWW-Authenticate challenge
+    fn sendUnauthorized(self: *HttpServer, client_fd: std.posix.socket_t) !void {
+        self.log.debug("http_auth_failed", .{ .status = 401 });
+        const body = "{\"error\":\"Unauthorized\",\"code\":401}";
+        var response_buf: [512]u8 = undefined;
+        const response = try std.fmt.bufPrint(
+            &response_buf,
+            "HTTP/1.1 401 Unauthorized\r\nContent-Type: application/json\r\nWWW-Authenticate: Basic realm=\"quotez\"\r\nContent-Length: {d}\r\n\r\n{s}",
+            .{ body.len, body },
+        );
+        _ = posix_net.send(client_fd, response, 0) catch {};
     }
 
     /// Send HTTP/1.1 response
@@ -234,7 +383,7 @@ test "http server initialization" {
     defer store.deinit();
 
     // Try to bind to a high port (non-privileged)
-    var server = HttpServer.init(allocator, "127.0.0.1", 18080, &store) catch |err| {
+    var server = HttpServer.init(allocator, "127.0.0.1", 18080, &store, "admin", "quotez") catch |err| {
         // May fail if port is in use, which is okay for testing
         if (err == error.AddressInUse) return error.SkipZigTest;
         return err;
@@ -243,4 +392,123 @@ test "http server initialization" {
 
     // Server should be initialized
     try std.testing.expectEqual(@as(u16, 18080), std.mem.bigToNative(u16, server.address.port));
+}
+
+test "parseContentLength with valid header" {
+    const request = "POST /quotes HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nContent-Length: 42\r\n\r\n{\"text\":\"hello\"}";
+    const result = HttpServer.parseContentLength(request);
+    try std.testing.expectEqual(@as(?usize, 42), result);
+}
+
+test "parseContentLength with missing header" {
+    const request = "GET /health HTTP/1.1\r\nHost: localhost\r\n\r\n";
+    const result = HttpServer.parseContentLength(request);
+    try std.testing.expectEqual(@as(?usize, null), result);
+}
+
+test "parseContentLength with lowercase header" {
+    const request = "POST /quotes HTTP/1.1\r\nHost: localhost\r\ncontent-length: 100\r\n\r\nbody";
+    const result = HttpServer.parseContentLength(request);
+    try std.testing.expectEqual(@as(?usize, 100), result);
+}
+
+test "findBody with body present" {
+    const request = "POST /q HTTP/1.1\r\nContent-Length: 5\r\n\r\nhello";
+    const result = HttpServer.findBody(request);
+    try std.testing.expectEqualStrings("hello", result.body);
+    try std.testing.expectEqual(@as(usize, 39), result.headers_end);
+}
+
+test "findBody without body" {
+    const request = "GET /health HTTP/1.1\r\nHost: localhost\r\n\r\n";
+    const result = HttpServer.findBody(request);
+    try std.testing.expectEqualStrings("", result.body);
+}
+
+test "findBody with no CRLF separator" {
+    const request = "GET /health HTTP/1.1";
+    const result = HttpServer.findBody(request);
+    try std.testing.expectEqualStrings("", result.body);
+    try std.testing.expectEqual(request.len, result.headers_end);
+}
+
+test "sendErrorResponse json format" {
+    // Test that the JSON body format string produces valid JSON
+    var body_buf: [512]u8 = undefined;
+    const body = try std.fmt.bufPrint(
+        &body_buf,
+        "{{\"error\":\"{s}\",\"code\":{d}}}",
+        .{ "Not Found", 404 },
+    );
+    try std.testing.expectEqualStrings("{\"error\":\"Not Found\",\"code\":404}", body);
+}
+
+test "sendErrorResponse json format 413" {
+    var body_buf: [512]u8 = undefined;
+    const body = try std.fmt.bufPrint(
+        &body_buf,
+        "{{\"error\":\"{s}\",\"code\":{d}}}",
+        .{ "Request body too large", 413 },
+    );
+    try std.testing.expectEqualStrings("{\"error\":\"Request body too large\",\"code\":413}", body);
+}
+
+test "checkAuth with valid credentials" {
+    const allocator = std.testing.allocator;
+    var store = quote_store.QuoteStore.init(allocator);
+    defer store.deinit();
+
+    // Construct server directly without binding a socket (auth doesn't use socket)
+    var server = HttpServer{
+        .socket = -1,
+        .address = std.mem.zeroes(std.posix.sockaddr.in),
+        .store = &store,
+        .log = logger.Logger.init(),
+        .allocator = allocator,
+        .auth_username = "admin",
+        .auth_password = "quotez",
+    };
+
+    // "admin:quotez" base64-encoded is "YWRtaW46cXVvdGV6"
+    const request = "GET /api/quotes HTTP/1.1\r\nHost: localhost\r\nAuthorization: Basic YWRtaW46cXVvdGV6\r\n\r\n";
+    try std.testing.expect(server.checkAuth(request));
+}
+
+test "checkAuth with invalid credentials" {
+    const allocator = std.testing.allocator;
+    var store = quote_store.QuoteStore.init(allocator);
+    defer store.deinit();
+
+    var server = HttpServer{
+        .socket = -1,
+        .address = std.mem.zeroes(std.posix.sockaddr.in),
+        .store = &store,
+        .log = logger.Logger.init(),
+        .allocator = allocator,
+        .auth_username = "admin",
+        .auth_password = "quotez",
+    };
+
+    // "wrong:wrong" base64-encoded is "d3Jvbmc6d3Jvbmc="
+    const request = "GET /api/quotes HTTP/1.1\r\nHost: localhost\r\nAuthorization: Basic d3Jvbmc6d3Jvbmc=\r\n\r\n";
+    try std.testing.expect(!server.checkAuth(request));
+}
+
+test "checkAuth with missing Authorization header" {
+    const allocator = std.testing.allocator;
+    var store = quote_store.QuoteStore.init(allocator);
+    defer store.deinit();
+
+    var server = HttpServer{
+        .socket = -1,
+        .address = std.mem.zeroes(std.posix.sockaddr.in),
+        .store = &store,
+        .log = logger.Logger.init(),
+        .allocator = allocator,
+        .auth_username = "admin",
+        .auth_password = "quotez",
+    };
+
+    const request = "GET /api/quotes HTTP/1.1\r\nHost: localhost\r\n\r\n";
+    try std.testing.expect(!server.checkAuth(request));
 }

@@ -130,6 +130,8 @@ pub fn main() !void {
             cfg.host,
             cfg.health_port,
             &store,
+            cfg.api_username,
+            cfg.api_password,
         ) catch |err| {
             log.err("fatal", .{
                 .reason = "failed to start HTTP server",
