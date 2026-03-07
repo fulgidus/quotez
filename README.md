@@ -16,7 +16,8 @@ A tiny Zig nanoservice implementing the Quote of the Day (RFC 865) protocol over
 
 ### Prerequisites
 
-- Zig 0.16.0-dev.2682+02142a54d or later
+- Zig 0.15.2
+- Bun (for website)
 - Docker (optional, for container deployment)
 
 ### Build
@@ -61,21 +62,73 @@ nc localhost 17              # TCP
 echo "" | nc -u localhost 17 # UDP
 ```
 
-### Docker
+## REST API
+
+The service provides a full HTTP REST API on the health port (default 8080) for quote management and operational control.
+
+### Authentication
+
+All `/api/*` endpoints require **Basic HTTP Authentication**. Configure credentials in the `[api]` section of `quotez.toml`.
+
+### Key Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Health check (unprotected) |
+| `/ready` | GET | Readiness check (unprotected) |
+| `/api/quotes` | GET | List all quotes |
+| `/api/quotes` | POST | Add a new quote |
+| `/api/quotes/:id` | PUT | Update an existing quote |
+| `/api/quotes/:id` | DELETE | Delete a quote |
+| `/api/status` | GET | Service status and metrics |
+| `/api/config` | GET/PATCH | View or update runtime configuration |
+| `/api/reload` | POST | Trigger immediate reload from disk |
+| `/api/maintenance` | POST | Toggle maintenance mode |
+
+## Website
+
+A modern web interface for browsing quotes and managing the service.
+
+### Features
+
+- **Public Showcase**: Zen, Rich, and Simple display modes for quotes.
+- **Admin Backoffice**: Full quote CRUD, service status monitoring, and runtime configuration.
+- **Tech Stack**: React SPA powered by Vite, with a Bun-based backend server.
+
+### Setup and Run
 
 ```bash
-# Build static binary
-zig build -Doptimize=ReleaseSmall -Dtarget=x86_64-linux-musl
+cd website
+bun install
+bun run build
+# Run with environment variables
+QOTD_API_HOST=localhost QOTD_TCP_HOST=localhost PORT=3000 bun run server.ts
+```
 
-# Build Docker image
-docker build -t quotez:latest .
+### Routes
 
-# Run container
-docker run -d \
-  -p 17:17/tcp -p 17:17/udp \
-  -v $(pwd)/quotes:/data/quotes:ro \
-  -v $(pwd)/quotez.toml:/quotez.toml:ro \
-  quotez:latest
+- `/`: Public showcase with multiple display modes.
+- `/admin`: Admin panel for service management.
+
+## Docker
+
+```bash
+# Build and run the Zig service
+docker build -t quotez-service:latest .
+docker run -d -p 17:17/tcp -p 17:17/udp -p 8080:8080 quotez-service:latest
+
+# Build and run the Website
+cd website
+docker build -t quotez-web:latest .
+docker run -d -p 3000:3000 -e QOTD_API_HOST=host.docker.internal quotez-web:latest
+```
+
+## Deployment
+
+The project includes a Helm chart for Kubernetes deployment, managing both the Zig nanoservice and the web interface.
+
+```bash
+helm install my-quotez ./helm/quotez
 ```
 
 ## Project Structure
@@ -85,8 +138,12 @@ src/
 ├── main.zig              # Entry point and event loop
 ├── config.zig            # TOML configuration parsing
 ├── logger.zig            # Structured logging
+├── net.zig               # Shared IP and network utilities
 ├── quote_store.zig       # In-memory quote storage
 ├── selector.zig          # Selection mode algorithms
+├── watcher.zig           # File system polling and hot reload
+├── compat/
+│   └── posix_net.zig     # Socket compatibility layer
 ├── parsers/
 │   ├── parser.zig        # Format detection and dispatch
 │   ├── txt.zig           # Plaintext parser
@@ -95,8 +152,18 @@ src/
 │   ├── toml.zig          # TOML parser
 │   └── yaml.zig          # YAML parser
 └── servers/
+    ├── http.zig          # REST API server
     ├── tcp.zig           # TCP QOTD server
     └── udp.zig           # UDP QOTD server
+
+website/
+├── src/                  # React SPA source code
+├── server.ts             # Bun HTTP server and API proxy
+├── Dockerfile            # Website container definition
+└── package.json          # Node/Bun dependencies
+
+helm/
+└── quotez/               # Umbrella Helm chart for full deployment
 
 tests/
 ├── integration/
@@ -107,17 +174,19 @@ tests/
 
 ## Development Status
 
-**Phase Progress**: 36/74 tasks complete (48.6%)
+**Phase Progress**: 74/74 tasks complete (100%)
 
 - ✅ **Phase 1 (Setup)**: Complete
-- ✅ **Phase 2 (Foundational)**: Complete - Config, Logger, QuoteStore, Selector
-- ✅ **Phase 3 (US3 - Quote Loading)**: Complete - All 5 parsers implemented
-- ✅ **Phase 4 (US6 - Configuration)**: Complete - TOML config with validation
-- ✅ **Phase 5 (US1 - TCP Server)**: Complete - RFC 865 TCP implementation
-- ✅ **Phase 6 (US2 - UDP Server)**: Complete - RFC 865 UDP implementation
-- 🚧 **Phase 7 (US5 - Selection Modes)**: Pending - Edge case tests
-- 🚧 **Phase 8 (US4 - Hot Reload)**: Pending - File watcher implementation
-- 🚧 **Phase 9 (Polish)**: In Progress - Binary optimization, deployment
+- ✅ **Phase 2 (Foundational)**: Complete
+- ✅ **Phase 3 (Quote Loading)**: Complete
+- ✅ **Phase 4 (Configuration)**: Complete
+- ✅ **Phase 5 (TCP Server)**: Complete
+- ✅ **Phase 6 (UDP Server)**: Complete
+- ✅ **Phase 7 (Selection Modes)**: Complete
+- ✅ **Phase 8 (Hot Reload)**: Complete
+- ✅ **Phase 9 (REST API)**: Complete
+- ✅ **Phase 10 (Website)**: Complete
+- ✅ **Phase 11 (Deployment)**: Complete
 
 See [specs/001-qotd-nanoservice/tasks.md](specs/001-qotd-nanoservice/tasks.md) for detailed task breakdown.
 
