@@ -122,10 +122,31 @@ pub fn build(b: *std.Build) void {
     const perf_step = b.step("test-perf", "Run performance tests");
     perf_step.dependOn(&run_perf_tests.step);
 
+    // Hot reload test module
+    const reload_module = b.createModule(.{
+        .root_source_file = b.path("tests/integration/reload_test.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    reload_module.addImport("src", src_module);
+
+    // Hot reload tests
+    const reload_tests = b.addTest(.{
+        .root_module = reload_module,
+    });
+
+    const run_reload_tests = b.addRunArtifact(reload_tests);
+
+    // Hot reload test step
+    const reload_step = b.step("test-reload", "Run hot reload integration test");
+    reload_step.dependOn(&run_reload_tests.step);
+
     // All tests step
     const all_tests_step = b.step("test-all", "Run all tests");
     all_tests_step.dependOn(&run_unit_tests.step);
     all_tests_step.dependOn(&run_integration_tests.step);
     all_tests_step.dependOn(&run_e2e_tests.step);
     all_tests_step.dependOn(&run_perf_tests.step);
+    all_tests_step.dependOn(&run_reload_tests.step);
 }
