@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
-    "start": "bun run .output/server/index.mjs",
+    "start": "bun run server.ts",
     "test": "echo \"No tests yet\" && exit 0"
   },
   "dependencies": {
