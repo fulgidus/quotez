@@ -3,6 +3,9 @@ const logger = @import("../logger.zig");
 const quote_store = @import("../quote_store.zig");
 const posix_net = @import("../compat/posix_net.zig");
 const net = @import("../net.zig");
+const selector_mod = @import("../selector.zig");
+const watcher_mod = @import("../watcher.zig");
+const config_mod = @import("../config.zig");
 
 /// HTTP health endpoint server
 pub const HttpServer = struct {
@@ -13,6 +16,11 @@ pub const HttpServer = struct {
     allocator: std.mem.Allocator,
     auth_username: []const u8,
     auth_password: []const u8,
+    selector: *selector_mod.Selector,
+    watcher: *watcher_mod.FileWatcher,
+    startup_time: std.time.Instant,
+    maintenance_mode: bool,
+    config_ref: *const config_mod.Configuration,
 
     /// Initialize and bind HTTP server
     pub fn init(
@@ -22,6 +30,10 @@ pub const HttpServer = struct {
         store: *quote_store.QuoteStore,
         auth_username: []const u8,
         auth_password: []const u8,
+        sel: *selector_mod.Selector,
+        file_watcher: *watcher_mod.FileWatcher,
+        startup: std.time.Instant,
+        config: *const config_mod.Configuration,
     ) !HttpServer {
         var log = logger.Logger.init();
 
@@ -82,6 +94,11 @@ pub const HttpServer = struct {
             .allocator = allocator,
             .auth_username = auth_username,
             .auth_password = auth_password,
+            .selector = sel,
+            .watcher = file_watcher,
+            .startup_time = startup,
+            .maintenance_mode = false,
+            .config_ref = config,
         };
     }
 
@@ -194,6 +211,14 @@ pub const HttpServer = struct {
                     return;
                 };
                 try self.handleQuoteById(client_fd, method, id, request_body);
+            } else if (std.mem.eql(u8, path, "/api/status")) {
+                try self.handleStatus(client_fd, method);
+            } else if (std.mem.eql(u8, path, "/api/config")) {
+                try self.handleConfig(client_fd, method, request_body);
+            } else if (std.mem.eql(u8, path, "/api/reload")) {
+                try self.handleReload(client_fd, method);
+            } else if (std.mem.eql(u8, path, "/api/maintenance")) {
+                try self.handleMaintenance(client_fd, method, request_body);
             } else {
                 try self.sendErrorResponse(client_fd, 404, "Not Found", "Not Found");
             }
@@ -362,6 +387,136 @@ pub const HttpServer = struct {
         }
     }
 
+    /// Handle /api/status endpoint — GET only, requires auth
+    fn handleStatus(self: *HttpServer, client_fd: std.posix.socket_t, method: []const u8) !void {
+        if (!std.mem.eql(u8, method, "GET")) {
+            try self.sendErrorResponse(client_fd, 405, "Method Not Allowed", "Method Not Allowed");
+            return;
+        }
+        const now = std.time.Instant.now() catch self.startup_time;
+        const uptime_ns = now.since(self.startup_time);
+        const uptime_s = uptime_ns / std.time.ns_per_s;
+        const status_str: []const u8 = if (self.maintenance_mode) "maintenance" else "ok";
+        const mode_str = self.selector.mode.asString();
+        const quote_count = self.store.count();
+        const interval = self.watcher.interval_seconds;
+
+        var json_buf: [512]u8 = undefined;
+        const body = try std.fmt.bufPrint(
+            &json_buf,
+            "{{\"status\":\"{s}\",\"quotes\":{d},\"mode\":\"{s}\",\"uptime_seconds\":{d},\"polling_interval\":{d}}}",
+            .{ status_str, quote_count, mode_str, uptime_s, interval },
+        );
+        try self.sendJsonResponse(client_fd, 200, "OK", body);
+    }
+
+    /// Handle /api/config endpoint — GET config, PATCH update runtime settings
+    fn handleConfig(self: *HttpServer, client_fd: std.posix.socket_t, method: []const u8, body: []const u8) !void {
+        if (std.mem.eql(u8, method, "GET")) {
+            var json_buf: std.ArrayList(u8) = .{};
+            defer json_buf.deinit(self.allocator);
+
+            try json_buf.appendSlice(self.allocator, "{\"selection_mode\":\"");
+            try json_buf.appendSlice(self.allocator, self.selector.mode.asString());
+
+            var interval_buf: [64]u8 = undefined;
+            const interval_part = try std.fmt.bufPrint(
+                &interval_buf,
+                "\",\"polling_interval\":{d},\"directories\":[",
+                .{self.watcher.interval_seconds},
+            );
+            try json_buf.appendSlice(self.allocator, interval_part);
+
+            for (self.config_ref.directories, 0..) |dir, i| {
+                if (i > 0) try json_buf.append(self.allocator, ',');
+                try json_buf.append(self.allocator, '"');
+                try appendJsonEscaped(&json_buf, self.allocator, dir);
+                try json_buf.append(self.allocator, '"');
+            }
+            try json_buf.appendSlice(self.allocator, "]}");
+
+            try self.sendJsonResponse(client_fd, 200, "OK", json_buf.items);
+        } else if (std.mem.eql(u8, method, "PATCH")) {
+            var changed = false;
+
+            // Update selection_mode if present
+            if (extractJsonStringField(body, "selection_mode")) |mode_str| {
+                if (config_mod.SelectionMode.fromString(mode_str)) |new_mode| {
+                    // Create new selector first (in case init fails, old one still intact)
+                    const new_selector = selector_mod.Selector.init(
+                        self.selector.allocator,
+                        new_mode,
+                        self.store.count(),
+                    ) catch |err| {
+                        self.log.err("selector_reinit_failed", .{ .err = @errorName(err) });
+                        try self.sendErrorResponse(client_fd, 500, "Internal Server Error", "Failed to update selection mode");
+                        return;
+                    };
+                    self.selector.deinit();
+                    self.selector.* = new_selector;
+                    changed = true;
+                }
+            }
+
+            // Update polling_interval if present
+            if (extractJsonUintField(body, "polling_interval")) |new_interval| {
+                self.watcher.interval_seconds = @as(u64, new_interval);
+                changed = true;
+            }
+
+            if (changed) {
+                try self.sendJsonResponse(client_fd, 200, "OK", "{\"status\":\"ok\"}");
+            } else {
+                try self.sendErrorResponse(client_fd, 400, "Bad Request", "No valid fields to update");
+            }
+        } else {
+            try self.sendErrorResponse(client_fd, 405, "Method Not Allowed", "Method Not Allowed");
+        }
+    }
+
+    /// Handle /api/reload endpoint — POST only, triggers store rebuild
+    fn handleReload(self: *HttpServer, client_fd: std.posix.socket_t, method: []const u8) !void {
+        if (!std.mem.eql(u8, method, "POST")) {
+            try self.sendErrorResponse(client_fd, 405, "Method Not Allowed", "Method Not Allowed");
+            return;
+        }
+        self.store.build(self.config_ref.directories) catch |err| {
+            self.log.err("reload_failed", .{ .err = @errorName(err) });
+            try self.sendErrorResponse(client_fd, 500, "Internal Server Error", "Reload failed");
+            return;
+        };
+        self.selector.reset(self.store.count()) catch {};
+
+        var json_buf: [128]u8 = undefined;
+        const resp_body = try std.fmt.bufPrint(
+            &json_buf,
+            "{{\"status\":\"ok\",\"quotes\":{d}}}",
+            .{self.store.count()},
+        );
+        try self.sendJsonResponse(client_fd, 200, "OK", resp_body);
+    }
+
+    /// Handle /api/maintenance endpoint — POST only, sets/clears maintenance flag
+    fn handleMaintenance(self: *HttpServer, client_fd: std.posix.socket_t, method: []const u8, body: []const u8) !void {
+        if (!std.mem.eql(u8, method, "POST")) {
+            try self.sendErrorResponse(client_fd, 405, "Method Not Allowed", "Method Not Allowed");
+            return;
+        }
+        const enabled = extractBoolField(body, "enabled") catch {
+            try self.sendErrorResponse(client_fd, 400, "Bad Request", "Missing or invalid 'enabled' field");
+            return;
+        };
+        self.maintenance_mode = enabled;
+
+        var json_buf: [64]u8 = undefined;
+        const resp_body = try std.fmt.bufPrint(
+            &json_buf,
+            "{{\"status\":\"ok\",\"maintenance\":{}}}",
+            .{enabled},
+        );
+        try self.sendJsonResponse(client_fd, 200, "OK", resp_body);
+    }
+
     /// Send a JSON response with the given status and body
     fn sendJsonResponse(
         self: *HttpServer,
@@ -513,6 +668,61 @@ pub const HttpServer = struct {
     }
 };
 
+/// Extract a JSON string field value: finds "field_name":"value" in body
+/// Returns slice into body (not allocated)
+fn extractJsonStringField(body: []const u8, field_name: []const u8) ?[]const u8 {
+    var search_buf: [64]u8 = undefined;
+    const key = std.fmt.bufPrint(&search_buf, "\"{s}\":\"", .{field_name}) catch return null;
+    const start_pos = std.mem.indexOf(u8, body, key) orelse return null;
+    const value_start = start_pos + key.len;
+    var i = value_start;
+    while (i < body.len) {
+        if (body[i] == '\\') {
+            i += 2;
+            continue;
+        }
+        if (body[i] == '"') break;
+        i += 1;
+    }
+    if (i >= body.len) return null;
+    return body[value_start..i];
+}
+
+/// Extract a JSON unsigned integer field value: finds "field_name": N in body
+fn extractJsonUintField(body: []const u8, field_name: []const u8) ?u32 {
+    var search_buf: [64]u8 = undefined;
+    const key = std.fmt.bufPrint(&search_buf, "\"{s}\":", .{field_name}) catch return null;
+    const start_pos = std.mem.indexOf(u8, body, key) orelse return null;
+    var i = start_pos + key.len;
+    // Skip whitespace
+    while (i < body.len and (body[i] == ' ' or body[i] == '\t')) i += 1;
+    if (i >= body.len) return null;
+    // Parse digits
+    var result: u32 = 0;
+    var found_digit = false;
+    while (i < body.len and body[i] >= '0' and body[i] <= '9') {
+        result = result * 10 + (body[i] - '0');
+        found_digit = true;
+        i += 1;
+    }
+    if (!found_digit) return null;
+    return result;
+}
+
+/// Extract a JSON boolean field value: finds "field_name": true/false in body
+fn extractBoolField(body: []const u8, field_name: []const u8) !bool {
+    var search_buf: [64]u8 = undefined;
+    const key = try std.fmt.bufPrint(&search_buf, "\"{s}\":", .{field_name});
+    const start_pos = std.mem.indexOf(u8, body, key) orelse return error.FieldNotFound;
+    var i = start_pos + key.len;
+    // Skip whitespace
+    while (i < body.len and (body[i] == ' ' or body[i] == '\t')) i += 1;
+    if (i >= body.len) return error.FieldNotFound;
+    if (std.mem.startsWith(u8, body[i..], "true")) return true;
+    if (std.mem.startsWith(u8, body[i..], "false")) return false;
+    return error.InvalidBoolValue;
+}
+
 /// Extract "text" field from JSON body like {"text":"..."}
 /// Returns the text value (not allocated — points into body slice)
 fn extractTextField(body: []const u8) ![]const u8 {
@@ -584,7 +794,7 @@ test "http server initialization" {
     defer store.deinit();
 
     // Try to bind to a high port (non-privileged)
-    var server = HttpServer.init(allocator, "127.0.0.1", 18080, &store, "admin", "quotez") catch |err| {
+    var server = HttpServer.init(allocator, "127.0.0.1", 18080, &store, "admin", "quotez", undefined, undefined, undefined, undefined) catch |err| {
         // May fail if port is in use, which is okay for testing
         if (err == error.AddressInUse) return error.SkipZigTest;
         return err;
@@ -668,6 +878,11 @@ test "checkAuth with valid credentials" {
         .allocator = allocator,
         .auth_username = "admin",
         .auth_password = "quotez",
+        .selector = undefined,
+        .watcher = undefined,
+        .startup_time = undefined,
+        .maintenance_mode = false,
+        .config_ref = undefined,
     };
 
     // "admin:quotez" base64-encoded is "YWRtaW46cXVvdGV6"
@@ -688,6 +903,11 @@ test "checkAuth with invalid credentials" {
         .allocator = allocator,
         .auth_username = "admin",
         .auth_password = "quotez",
+        .selector = undefined,
+        .watcher = undefined,
+        .startup_time = undefined,
+        .maintenance_mode = false,
+        .config_ref = undefined,
     };
 
     // "wrong:wrong" base64-encoded is "d3Jvbmc6d3Jvbmc="
@@ -708,6 +928,11 @@ test "checkAuth with missing Authorization header" {
         .allocator = allocator,
         .auth_username = "admin",
         .auth_password = "quotez",
+        .selector = undefined,
+        .watcher = undefined,
+        .startup_time = undefined,
+        .maintenance_mode = false,
+        .config_ref = undefined,
     };
 
     const request = "GET /api/quotes HTTP/1.1\r\nHost: localhost\r\n\r\n";
@@ -748,7 +973,7 @@ test "api quotes CRUD endpoint behavior" {
     defer store.deinit();
     try store.add("Initial quote");
 
-    var server = HttpServer.init(allocator, "127.0.0.1", 18081, &store, "admin", "quotez") catch |err| {
+    var server = HttpServer.init(allocator, "127.0.0.1", 18081, &store, "admin", "quotez", undefined, undefined, undefined, undefined) catch |err| {
         if (err == error.AddressInUse) return error.SkipZigTest;
         return err;
     };

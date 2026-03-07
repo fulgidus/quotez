@@ -122,6 +122,17 @@ pub fn main() !void {
     };
     defer udp.deinit();
 
+    // Initialize FileWatcher for hot reload
+    var file_watcher = try watcher.FileWatcher.init(
+        allocator,
+        cfg.directories,
+        @as(u64, cfg.polling_interval), // Cast u32 to u64
+    );
+    defer file_watcher.deinit();
+
+    // Record startup time for /api/status uptime calculation
+    const startup_time = std.time.Instant.now() catch std.time.Instant{ .timestamp = .{ .sec = 0, .nsec = 0 } };
+
     // Initialize HTTP server (conditional on health_enabled)
     var http_opt: ?http_server.HttpServer = null;
     if (cfg.health_enabled) {
@@ -132,6 +143,10 @@ pub fn main() !void {
             &store,
             cfg.api_username,
             cfg.api_password,
+            &sel,
+            &file_watcher,
+            startup_time,
+            &cfg,
         ) catch |err| {
             log.err("fatal", .{
                 .reason = "failed to start HTTP server",
@@ -149,14 +164,6 @@ pub fn main() !void {
         .udp_port = cfg.udp_port,
         .quotes_loaded = store.count(),
     });
-
-    // Initialize FileWatcher for hot reload
-    var file_watcher = try watcher.FileWatcher.init(
-        allocator,
-        cfg.directories,
-        @as(u64, cfg.polling_interval), // Cast u32 to u64
-    );
-    defer file_watcher.deinit();
 
     // Setup signal handling for graceful shutdown
     var shutdown_requested = std.atomic.Value(bool).init(false);
