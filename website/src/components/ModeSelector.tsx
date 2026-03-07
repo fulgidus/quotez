@@ -1,4 +1,4 @@
-import { DisplayMode } from './QuoteDisplay';
+import type { DisplayMode } from './QuoteDisplay';
 import '../styles/mode-selector.css';
 
 interface ModeSelectorProps {
