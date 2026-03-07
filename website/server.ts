@@ -1,5 +1,6 @@
 import { Database } from "bun:sqlite";
 import { getQuote } from "./src/lib/qotd-client";
+import { initDb, getSetting, setSetting, getAllSettings } from "./src/lib/settings";
 import path from "node:path";
 import fs from "node:fs";
 
@@ -18,6 +19,7 @@ if (!fs.existsSync(dbDir)) {
 }
 const db = new Database(DB_PATH, { create: true });
 console.log(`[server] SQLite database opened at ${DB_PATH}`);
+initDb(db);
 
 const distDir = path.join(import.meta.dir, "dist");
 
@@ -105,6 +107,28 @@ const server = Bun.serve({
         console.error("[server] QOTD TCP error:", err);
         return serviceUnavailable();
       }
+    }
+
+    if (pathname === "/settings") {
+      if (req.method === "GET") {
+        return Response.json(getAllSettings(db));
+      }
+      if (req.method === "PATCH") {
+        try {
+          const updates = (await req.json()) as Record<string, string>;
+          for (const [key, value] of Object.entries(updates)) {
+            setSetting(db, key, String(value));
+          }
+          return Response.json(getAllSettings(db));
+        } catch (err) {
+          console.error("[server] Settings PATCH error:", err);
+          return new Response(JSON.stringify({ error: "Invalid request body" }), {
+            status: 400,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+      }
+      return new Response("Method Not Allowed", { status: 405 });
     }
 
     if (pathname.startsWith("/api/")) {
