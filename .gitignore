@@ -37,6 +37,7 @@ quotez.toml.local
 
 # Root-level scratch/debug files (prevent future pollution)
 /test_*
+/test_*.zig
 /dump_*.zig
 /run_*.zig
 /perf-*.txt

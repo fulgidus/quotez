@@ -171,15 +171,15 @@ Single project structure at repository root:
 
 ### Implementation for User Story 4
 
-- [ ] T052 [P] [US4] Implement FileWatcher entity in src/watcher.zig with directories, snapshots HashMap, and interval per data-model.md FileWatcher
-- [ ] T053 [US4] Implement directory walking and stat() collection in src/watcher.zig per research.md file system watching
-- [ ] T054 [US4] Implement mtime comparison logic in src/watcher.zig (detect new, modified, deleted files)
-- [ ] T055 [US4] Implement FileWatcher.poll() method returning bool for change detection per data-model.md
-- [ ] T056 [US4] Add FileWatcher unit tests in src/watcher.zig for change detection scenarios
-- [ ] T057 [US4] Implement atomic pointer swap for QuoteStore rebuild in src/main.zig per data-model.md rebuild flow
-- [ ] T058 [US4] Integrate FileWatcher.poll() into main event loop timeout in src/main.zig
-- [ ] T059 [US4] Trigger QuoteStore.build() on detected changes and swap pointer in src/main.zig
-- [ ] T060 [US4] Ensure Selector reset on rebuild per spec.md clarifications (sequential→0, shuffle→reshuffle, etc.)
+- [X] T052 [P] [US4] Implement FileWatcher entity in src/watcher.zig with directories, snapshots HashMap, and interval per data-model.md FileWatcher
+- [X] T053 [US4] Implement directory walking and stat() collection in src/watcher.zig per research.md file system watching
+- [X] T054 [US4] Implement mtime comparison logic in src/watcher.zig (detect new, modified, deleted files)
+- [X] T055 [US4] Implement FileWatcher.poll() method returning bool for change detection per data-model.md
+- [X] T056 [US4] Add FileWatcher unit tests in src/watcher.zig for change detection scenarios
+- [X] T057 [US4] Implement atomic pointer swap for QuoteStore rebuild in src/main.zig per data-model.md rebuild flow
+- [X] T058 [US4] Integrate FileWatcher.poll() into main event loop timeout in src/main.zig
+- [X] T059 [US4] Trigger QuoteStore.build() on detected changes and swap pointer in src/main.zig
+- [X] T060 [US4] Ensure Selector reset on rebuild per spec.md clarifications (sequential→0, shuffle→reshuffle, etc.)
 - [ ] T061 [US4] Create integration test in tests/integration/reload_test.zig verifying non-disruptive reload
 
 **Checkpoint**: At this point, User Story 4 should be fully functional - hot reloading works without service restart

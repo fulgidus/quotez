@@ -9,6 +9,7 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
+        .link_libc = true,
     });
 
     // Main executable
@@ -17,7 +18,6 @@ pub fn build(b: *std.Build) void {
         .root_module = root_module,
     });
 
-    exe.linkLibC();
     b.installArtifact(exe);
 
     // Run command
@@ -35,13 +35,13 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
+        .link_libc = true,
     });
 
     // Unit tests (embedded in source files)
     const unit_tests = b.addTest(.{
         .root_module = test_module,
     });
-    unit_tests.linkLibC();
 
     const run_unit_tests = b.addRunArtifact(unit_tests);
 
@@ -55,6 +55,7 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
+        .link_libc = true,
     });
 
     // Integration test module imports the src module
@@ -62,6 +63,7 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("tests/integration/protocol_test.zig"),
         .target = target,
         .optimize = optimize,
+        .link_libc = true,
     });
     integration_module.addImport("src", src_module);
 
@@ -69,7 +71,6 @@ pub fn build(b: *std.Build) void {
     const integration_tests = b.addTest(.{
         .root_module = integration_module,
     });
-    integration_tests.linkLibC();
 
     const run_integration_tests = b.addRunArtifact(integration_tests);
 
@@ -78,6 +79,7 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("tests/integration/end_to_end_test.zig"),
         .target = target,
         .optimize = optimize,
+        .link_libc = true,
     });
     e2e_module.addImport("src", src_module);
 
@@ -85,7 +87,6 @@ pub fn build(b: *std.Build) void {
     const e2e_tests = b.addTest(.{
         .root_module = e2e_module,
     });
-    e2e_tests.linkLibC();
 
     const run_e2e_tests = b.addRunArtifact(e2e_tests);
 
@@ -94,6 +95,7 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("tests/integration/perf_test.zig"),
         .target = target,
         .optimize = optimize,
+        .link_libc = true,
     });
     perf_module.addImport("src", src_module);
 
@@ -101,7 +103,6 @@ pub fn build(b: *std.Build) void {
     const perf_tests = b.addTest(.{
         .root_module = perf_module,
     });
-    perf_tests.linkLibC();
 
     const run_perf_tests = b.addRunArtifact(perf_tests);
 
@@ -121,10 +122,31 @@ pub fn build(b: *std.Build) void {
     const perf_step = b.step("test-perf", "Run performance tests");
     perf_step.dependOn(&run_perf_tests.step);
 
+    // Hot reload test module
+    const reload_module = b.createModule(.{
+        .root_source_file = b.path("tests/integration/reload_test.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    reload_module.addImport("src", src_module);
+
+    // Hot reload tests
+    const reload_tests = b.addTest(.{
+        .root_module = reload_module,
+    });
+
+    const run_reload_tests = b.addRunArtifact(reload_tests);
+
+    // Hot reload test step
+    const reload_step = b.step("test-reload", "Run hot reload integration test");
+    reload_step.dependOn(&run_reload_tests.step);
+
     // All tests step
     const all_tests_step = b.step("test-all", "Run all tests");
     all_tests_step.dependOn(&run_unit_tests.step);
     all_tests_step.dependOn(&run_integration_tests.step);
     all_tests_step.dependOn(&run_e2e_tests.step);
     all_tests_step.dependOn(&run_perf_tests.step);
+    all_tests_step.dependOn(&run_reload_tests.step);
 }

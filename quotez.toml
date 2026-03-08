@@ -31,3 +31,8 @@ mode = "random"
 # How often to check for file changes (seconds)
 # Default: 60
 interval_seconds = 60
+
+[api]
+enabled = true
+username = "admin"
+password = "quotez"

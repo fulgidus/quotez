@@ -44,6 +44,12 @@ pub const Configuration = struct {
     // Polling section
     polling_interval: u32,
 
+    // API section
+    api_enabled: bool,
+    api_username: []const u8,
+    api_password: []const u8,
+    api_quotes_path: []const u8,
+
     // Allocator for owned strings
     allocator: std.mem.Allocator,
 
@@ -56,12 +62,15 @@ pub const Configuration = struct {
         pub const health_port: u16 = 8080;
         pub const selection_mode: SelectionMode = .random;
         pub const polling_interval: u32 = 60;
+        pub const api_enabled: bool = true;
+        pub const api_username: []const u8 = "admin";
+        pub const api_password: []const u8 = "quotez";
+        pub const api_quotes_path: []const u8 = "/data/quotes/api-managed.json";
     };
     /// Load and parse configuration from file
     pub fn load(allocator: std.mem.Allocator, path: []const u8) !Configuration {
         var log = logger.Logger.init();
 
-        // Read configuration file using Zig 0.16 API
         const content = std.fs.cwd().readFileAlloc(allocator, path, 1024 * 1024) catch |err| {
             log.err("config_error", .{ .reason = "failed to read file", .path = path });
             return err;
@@ -85,6 +94,7 @@ pub const Configuration = struct {
             .directories = config.directories.len,
             .mode = config.selection_mode.asString(),
             .interval = config.polling_interval,
+            .api_enabled = config.api_enabled,
         });
         return config;
     }
@@ -96,6 +106,9 @@ pub const Configuration = struct {
         }
         self.allocator.free(self.directories);
         self.allocator.free(self.host);
+        self.allocator.free(self.api_username);
+        self.allocator.free(self.api_password);
+        self.allocator.free(self.api_quotes_path);
     }
 };
 
@@ -116,6 +129,10 @@ const TomlParser = struct {
     directories: ?std.ArrayList([]const u8) = null,
     mode: ?[]const u8 = null,
     polling_interval: ?u32 = null,
+    api_enabled: ?bool = null,
+    api_username: ?[]const u8 = null,
+    api_password: ?[]const u8 = null,
+    api_quotes_path: ?[]const u8 = null,
 
     pub fn init(allocator: std.mem.Allocator, content: []const u8) TomlParser {
         return .{
@@ -128,12 +145,20 @@ const TomlParser = struct {
 
     pub fn deinit(self: *TomlParser) void {
         if (self.directories) |*dirs| {
+            // Free each directory string before freeing the ArrayList
+            for (dirs.items) |dir| {
+                self.allocator.free(dir);
+            }
             dirs.deinit(self.allocator);
         }
         // Free the mode string - it's only used to convert to enum, not stored in Configuration
         if (self.mode) |mode_str| {
             self.allocator.free(mode_str);
         }
+        // Free api strings if they were parsed but not transferred to Configuration
+        if (self.api_username) |u| self.allocator.free(u);
+        if (self.api_password) |p| self.allocator.free(p);
+        if (self.api_quotes_path) |path| self.allocator.free(path);
         // Note: host is transferred to Configuration, so Configuration.deinit() frees it
     }
 
@@ -161,35 +186,57 @@ const TomlParser = struct {
         }
 
         // Apply defaults and build configuration
+        // Allocate owned strings first so we can errdefer them if validation fails
+        const host = self.host orelse try self.allocator.dupe(u8, Configuration.Defaults.host);
+        errdefer self.allocator.free(host);
+        const api_username = self.api_username orelse try self.allocator.dupe(u8, Configuration.Defaults.api_username);
+        errdefer self.allocator.free(api_username);
+        const api_password = self.api_password orelse try self.allocator.dupe(u8, Configuration.Defaults.api_password);
+        errdefer self.allocator.free(api_password);
+        const api_quotes_path = self.api_quotes_path orelse try self.allocator.dupe(u8, Configuration.Defaults.api_quotes_path);
+        errdefer self.allocator.free(api_quotes_path);
+
+        const selection_mode = blk: {
+            if (self.mode) |mode_str| {
+                if (SelectionMode.fromString(mode_str)) |mode| {
+                    break :blk mode;
+                } else {
+                    self.log.err("config_error", .{
+                        .reason = "invalid selection mode",
+                        .value = mode_str,
+                    });
+                    return error.InvalidSelectionMode;
+                }
+            } else {
+                self.log.info("default_applied", .{ .field = "quotes.mode", .value = "random" });
+                break :blk Configuration.Defaults.selection_mode;
+            }
+        };
+
         const config = Configuration{
             .allocator = self.allocator,
-            .host = self.host orelse try self.allocator.dupe(u8, Configuration.Defaults.host),
+            .host = host,
             .tcp_port = self.tcp_port orelse Configuration.Defaults.tcp_port,
             .udp_port = self.udp_port orelse Configuration.Defaults.udp_port,
             .health_enabled = self.health_enabled orelse Configuration.Defaults.health_enabled,
             .health_port = self.health_port orelse Configuration.Defaults.health_port,
-            .selection_mode = blk: {
-                if (self.mode) |mode_str| {
-                    if (SelectionMode.fromString(mode_str)) |mode| {
-                        break :blk mode;
-                    } else {
-                        self.log.err("config_error", .{
-                            .reason = "invalid selection mode",
-                            .value = mode_str,
-                        });
-                        return error.InvalidSelectionMode;
-                    }
-                } else {
-                    self.log.info("default_applied", .{ .field = "quotes.mode", .value = "random" });
-                    break :blk Configuration.Defaults.selection_mode;
-                }
-            },
+            .selection_mode = selection_mode,
             .polling_interval = self.polling_interval orelse blk: {
                 self.log.info("default_applied", .{ .field = "polling.interval_seconds", .value = 60 });
                 break :blk Configuration.Defaults.polling_interval;
             },
             .directories = if (self.directories) |*dirs| try dirs.toOwnedSlice(self.allocator) else &.{},
+            .api_enabled = self.api_enabled orelse Configuration.Defaults.api_enabled,
+            .api_username = api_username,
+            .api_password = api_password,
+            .api_quotes_path = api_quotes_path,
         };
+
+        // Null out transferred ownership so TomlParser.deinit() doesn't double-free
+        self.host = null;
+        self.api_username = null;
+        self.api_password = null;
+        self.api_quotes_path = null;
 
         // Validate ranges
         if (config.tcp_port == 0 or config.udp_port == 0) {
@@ -218,7 +265,6 @@ const TomlParser = struct {
         if (self.health_port == null) {
             self.log.info("default_applied", .{ .field = "health.port", .value = 8080 });
         }
-            self.log.info("default_applied", .{ .field = "health.port", .value = 8080 });
 
         return config;
     }
@@ -274,6 +320,8 @@ const TomlParser = struct {
                 try self.parseQuotesValue(key);
             } else if (std.mem.eql(u8, sec, "polling")) {
                 try self.parsePollingValue(key);
+            } else if (std.mem.eql(u8, sec, "api")) {
+                try self.parseApiValue(key);
             }
         }
     }
@@ -307,6 +355,18 @@ const TomlParser = struct {
             self.health_enabled = try self.parseBoolean();
         } else if (std.mem.eql(u8, key, "port")) {
             self.health_port = try self.parseInteger(u16);
+        }
+    }
+
+    fn parseApiValue(self: *TomlParser, key: []const u8) !void {
+        if (std.mem.eql(u8, key, "enabled")) {
+            self.api_enabled = try self.parseBoolean();
+        } else if (std.mem.eql(u8, key, "username")) {
+            self.api_username = try self.parseString();
+        } else if (std.mem.eql(u8, key, "password")) {
+            self.api_password = try self.parseString();
+        } else if (std.mem.eql(u8, key, "quotes_path")) {
+            self.api_quotes_path = try self.parseString();
         }
     }
 
@@ -503,7 +563,6 @@ test "configuration with comments" {
     try std.testing.expectEqual(SelectionMode.sequential, config.selection_mode);
 }
 
-
 test "health section parses correctly" {
     const allocator = std.testing.allocator;
     const content =
@@ -541,5 +600,3 @@ test "health section defaults apply when missing" {
     try std.testing.expectEqual(true, config.health_enabled);
     try std.testing.expectEqual(@as(u16, 8080), config.health_port);
 }
-
-

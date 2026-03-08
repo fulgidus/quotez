@@ -139,7 +139,7 @@ pub fn normalizeQuote(allocator: std.mem.Allocator, input: []const u8) !?[]const
 
     // Validate UTF-8 and replace invalid sequences
     var result: std.ArrayList(u8) = .{};
-    errdefer result.deinit(allocator);
+    defer result.deinit(allocator);
 
     var i: usize = 0;
     while (i < trimmed.len) {

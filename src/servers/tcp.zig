@@ -2,24 +2,8 @@ const std = @import("std");
 const logger = @import("../logger.zig");
 const quote_store = @import("../quote_store.zig");
 const selector_mod = @import("../selector.zig");
-
-/// Parse an IPv4 string like "127.0.0.1" or "0.0.0.0" into a big-endian u32
-fn parseIp4(host: []const u8) !u32 {
-    if (std.mem.eql(u8, host, "0.0.0.0")) return 0;
-    if (std.mem.eql(u8, host, "127.0.0.1")) return std.mem.nativeToBig(u32, 0x7F000001);
-
-    var parts = std.mem.splitScalar(u8, host, '.');
-    var result: u32 = 0;
-    var count: usize = 0;
-    while (parts.next()) |part| {
-        if (count >= 4) return error.InvalidIp;
-        const val = try std.fmt.parseInt(u8, part, 10);
-        result = (result << 8) | val;
-        count += 1;
-    }
-    if (count != 4) return error.InvalidIp;
-    return std.mem.nativeToBig(u32, result);
-}
+const posix_net = @import("../compat/posix_net.zig");
+const net = @import("../net.zig");
 
 /// TCP QOTD server implementing RFC 865
 pub const TcpServer = struct {
@@ -41,7 +25,7 @@ pub const TcpServer = struct {
         var log = logger.Logger.init();
 
         // Parse host string into IPv4 bytes
-        const parsed_bytes = parseIp4(host) catch |err| {
+        const parsed_bytes = net.parseIpv4(host) catch |err| {
             log.err("tcp_bind_failed", .{
                 .reason = "invalid address",
                 .host = host,
@@ -58,31 +42,31 @@ pub const TcpServer = struct {
         };
 
         // Create socket
-        const socket = try std.posix.socket(
+        const socket = try posix_net.socket(
             std.posix.AF.INET,
             std.posix.SOCK.STREAM,
             std.posix.IPPROTO.TCP,
         );
-        errdefer std.posix.close(socket);
+        errdefer posix_net.close(socket);
 
         // Set socket options
-        try std.posix.setsockopt(
+        try posix_net.setsockopt(
             socket,
             std.posix.SOL.SOCKET,
             std.posix.SO.REUSEADDR,
-            &std.mem.toBytes(@as(c_int, 1)),
+            std.mem.asBytes(&@as(c_int, 1)),
         );
 
         // Bind socket
-        try std.posix.bind(socket, @ptrCast(&addr), @sizeOf(std.posix.sockaddr.in));
+        try posix_net.bind(socket, @ptrCast(&addr), @sizeOf(std.posix.sockaddr.in));
 
         // Listen
-        try std.posix.listen(socket, 128);
+        try posix_net.listen(socket, 128);
 
         // Set non-blocking mode for event loop
-        const flags = try std.posix.fcntl(socket, std.posix.F.GETFL, 0);
+        const flags = try posix_net.fcntl(socket, std.posix.F.GETFL, 0);
         const nonblock_flag = @as(usize, @as(u32, @bitCast(std.posix.O{ .NONBLOCK = true })));
-        _ = try std.posix.fcntl(socket, std.posix.F.SETFL, flags | nonblock_flag);
+        _ = try posix_net.fcntl(socket, std.posix.F.SETFL, flags | nonblock_flag);
 
         log.info("tcp_server_started", .{
             .host = host,
@@ -101,7 +85,7 @@ pub const TcpServer = struct {
 
     /// Stop the TCP server
     pub fn deinit(self: *TcpServer) void {
-        std.posix.close(self.socket);
+        posix_net.close(self.socket);
         self.log.info("tcp_server_stopped", .{});
     }
 
@@ -109,9 +93,9 @@ pub const TcpServer = struct {
     pub fn acceptAndServe(self: *TcpServer) !void {
         var client_addr: std.posix.sockaddr.storage = undefined;
         var client_addr_len: std.posix.socklen_t = @sizeOf(std.posix.sockaddr.storage);
-        
+
         // Accept connection
-        const client_fd = std.posix.accept(
+        const client_fd = posix_net.accept(
             self.socket,
             @ptrCast(&client_addr),
             &client_addr_len,
@@ -127,7 +111,7 @@ pub const TcpServer = struct {
                 else => return err,
             }
         };
-        defer std.posix.close(client_fd);
+        defer posix_net.close(client_fd);
 
         // Check if quote store is empty
         if (self.store.isEmpty()) {
@@ -145,7 +129,7 @@ pub const TcpServer = struct {
         };
 
         // Send quote
-        _ = std.posix.send(client_fd, quote, 0) catch |err| {
+        _ = posix_net.send(client_fd, quote, 0) catch |err| {
             // Handle send errors
             switch (err) {
                 error.BrokenPipe, error.ConnectionResetByPeer => {
@@ -161,7 +145,7 @@ pub const TcpServer = struct {
         };
 
         // Send newline
-        _ = std.posix.send(client_fd, "\n", 0) catch |err| {
+        _ = posix_net.send(client_fd, "\n", 0) catch |err| {
             switch (err) {
                 error.BrokenPipe, error.ConnectionResetByPeer => return,
                 else => {
