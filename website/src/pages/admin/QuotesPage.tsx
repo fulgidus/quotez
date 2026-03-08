@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { fetchQuotes, createQuote, updateQuote, deleteQuote } from '../lib/api';
+import { fetchQuotes, createQuote, updateQuote, deleteQuote } from '../../lib/api';
 
 type Quote = { id: number; text: string };
 

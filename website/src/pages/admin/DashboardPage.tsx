@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { fetchStatus, triggerReload, toggleMaintenance } from '../lib/api';
+import { fetchStatus, triggerReload, toggleMaintenance } from '../../lib/api';
 
 function formatUptime(seconds: number): string {
   const h = Math.floor(seconds / 3600);
