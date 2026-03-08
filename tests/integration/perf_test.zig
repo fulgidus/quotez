@@ -1,6 +1,5 @@
 const std = @import("std");
 const posix = std.posix;
-const net = @import("../../src/compat/posix_net.zig");
 
 // Import from the main src module
 const src = @import("src");
@@ -11,6 +10,7 @@ const quote_store = src.quote_store_mod;
 const selector_mod = src.selector_mod;
 const tcp_server = src.tcp_server_mod;
 const udp_server = src.udp_server_mod;
+const net = src.posix_net;
 
 const QuoteStore = quote_store.QuoteStore;
 const Selector = selector_mod.Selector;
@@ -39,11 +39,11 @@ test "PERF: TCP response time < 10ms" {
 
     // Measure response time over multiple requests
     const num_requests = 100;
-    var total_ns: i128 = 0;
-    var max_ns: i128 = 0;
+    var total_ns: u64 = 0;
+    var max_ns: u64 = 0;
 
     for (0..num_requests) |_| {
-        const start = std.Io.Clock.now(.boot, std.Options.debug_io);
+        const start = try std.time.Instant.now();
 
         // Connect, receive, close
         const server_addr = std.posix.sockaddr.in{
@@ -70,8 +70,8 @@ test "PERF: TCP response time < 10ms" {
         var buf: [4096]u8 = undefined;
         _ = try net.recv(client_socket, &buf, 0);
 
-        const end = std.Io.Clock.now(.boot, std.Options.debug_io);
-        const elapsed = start.durationTo(end).toNanoseconds();
+        const end = try std.time.Instant.now();
+        const elapsed = end.since(start);
         if (elapsed > max_ns) max_ns = elapsed;
         total_ns += elapsed;
     }
@@ -119,11 +119,11 @@ test "PERF: UDP response time < 10ms" {
 
     // Measure response time over multiple requests
     const num_requests = 100;
-    var total_ns: i128 = 0;
-    var max_ns: i128 = 0;
+    var total_ns: u64 = 0;
+    var max_ns: u64 = 0;
 
     for (0..num_requests) |_| {
-        const start = std.Io.Clock.now(.boot, std.Options.debug_io);
+        const start = try std.time.Instant.now();
 
         // Send request
         _ = try net.sendto(client_socket, "", 0, @ptrCast(&server_addr), @sizeOf(std.posix.sockaddr.in));
@@ -137,8 +137,8 @@ test "PERF: UDP response time < 10ms" {
         var src_addr_len: posix.socklen_t = @sizeOf(posix.sockaddr);
         _ = try net.recvfrom(client_socket, &buf, 0, &src_addr, &src_addr_len);
 
-        const end = std.Io.Clock.now(.boot, std.Options.debug_io);
-        const elapsed = start.durationTo(end).toNanoseconds();
+        const end = try std.time.Instant.now();
+        const elapsed = end.since(start);
         if (elapsed > max_ns) max_ns = elapsed;
         total_ns += elapsed;
     }
@@ -156,7 +156,7 @@ test "PERF: UDP response time < 10ms" {
 test "PERF: 10k quotes load in < 5s" {
     const allocator = std.testing.allocator;
 
-    const start = std.Io.Clock.now(.boot, std.Options.debug_io);
+    const start = try std.time.Instant.now();
 
     var store = QuoteStore.init(allocator);
     defer store.deinit();
@@ -169,7 +169,8 @@ test "PERF: 10k quotes load in < 5s" {
         try store.addQuote(quote);
     }
 
-    const elapsed_ns = start.durationTo(std.Io.Clock.now(.boot, std.Options.debug_io)).toNanoseconds();
+    const end_time = try std.time.Instant.now();
+    const elapsed_ns = end_time.since(start);
     const elapsed_ms: f64 = @as(f64, @floatFromInt(elapsed_ns)) / 1_000_000.0;
     const elapsed_s: f64 = elapsed_ms / 1000.0;
 
@@ -200,7 +201,7 @@ test "PERF: Quote selection performance with 10k quotes" {
     defer sel.deinit();
 
     const num_selections = 10_000;
-    const start = std.Io.Clock.now(.boot, std.Options.debug_io);
+    const start = try std.time.Instant.now();
 
     for (0..num_selections) |_| {
         const idx = sel.next();
@@ -208,7 +209,8 @@ test "PERF: Quote selection performance with 10k quotes" {
         _ = quote; // Just access it
     }
 
-    const elapsed_ns = start.durationTo(std.Io.Clock.now(.boot, std.Options.debug_io)).toNanoseconds();
+    const end_time = try std.time.Instant.now();
+    const elapsed_ns = end_time.since(start);
     const elapsed_ms: f64 = @as(f64, @floatFromInt(elapsed_ns)) / 1_000_000.0;
     const per_selection_us: f64 = @as(f64, @floatFromInt(elapsed_ns)) / @as(f64, @floatFromInt(num_selections)) / 1000.0;
 
