@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { fetchConfig, updateConfig } from '../lib/api';
+import { fetchConfig, updateConfig } from '../../lib/api';
 
 export function AdminConfigPage() {
   const [config, setConfig] = useState<{selection_mode: string, polling_interval: number, directories: string[]} | null>(null);
