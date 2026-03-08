@@ -172,36 +172,6 @@ tests/
     └── quotes/           # Sample quote files for testing
 ```
 
-## Development Status
-
-**Phase Progress**: 74/74 tasks complete (100%)
-
-- ✅ **Phase 1 (Setup)**: Complete
-- ✅ **Phase 2 (Foundational)**: Complete
-- ✅ **Phase 3 (Quote Loading)**: Complete
-- ✅ **Phase 4 (Configuration)**: Complete
-- ✅ **Phase 5 (TCP Server)**: Complete
-- ✅ **Phase 6 (UDP Server)**: Complete
-- ✅ **Phase 7 (Selection Modes)**: Complete
-- ✅ **Phase 8 (Hot Reload)**: Complete
-- ✅ **Phase 9 (REST API)**: Complete
-- ✅ **Phase 10 (Website)**: Complete
-- ✅ **Phase 11 (Deployment)**: Complete
-
-See [specs/001-qotd-nanoservice/tasks.md](specs/001-qotd-nanoservice/tasks.md) for detailed task breakdown.
-
-## Documentation
-
-- **[Specification](specs/001-qotd-nanoservice/spec.md)**: Feature requirements and user stories
-- **[Implementation Plan](specs/001-qotd-nanoservice/plan.md)**: Architecture and tech stack
-- **[Data Model](specs/001-qotd-nanoservice/data-model.md)**: Entity definitions and state machines
-- **[Quickstart Guide](specs/001-qotd-nanoservice/quickstart.md)**: Deployment scenarios and examples
-- **[Contracts](specs/001-qotd-nanoservice/contracts/)**: Protocol specs and config schema
-
-## Contributing
-
-This project follows the [.specify](/.specify/) development workflow. See [AGENTS.md](/AGENTS.md) for development guidelines.
-
 ## License
 
 MIT
